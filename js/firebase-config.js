@@ -7,12 +7,12 @@
 // step that sign-in fails without.
 
 export const firebaseConfig = {
-  apiKey: "REPLACE_ME",
-  authDomain: "REPLACE_ME.firebaseapp.com",
-  projectId: "REPLACE_ME",
-  storageBucket: "REPLACE_ME.firebasestorage.app",
-  messagingSenderId: "REPLACE_ME",
-  appId: "REPLACE_ME",
+  apiKey: "AIzaSyC1ew1Nzgog929MIcMAPzatWTHJqiR0M9Q",
+  authDomain: "pints-conference.firebaseapp.com",
+  projectId: "pints-conference",
+  storageBucket: "pints-conference.firebasestorage.app",
+  messagingSenderId: "616721017872",
+  appId: "1:616721017872:web:e0f65bd02332930f2fae95"
 };
 
 /**
