@@ -30,7 +30,8 @@ With the help of:
 
 ## Previous editions
 
-- [PINTS 2025](https://pints2025.sciencesconf.org)
+Programmes, speakers and links for earlier meetings are on the
+[previous editions](previous.html) page.
 
 ## Contact
 
