@@ -941,7 +941,11 @@ Satisfies requirements 1 and 3, and establishes the rules test harness that ever
 > 2. **`js/firebase-config.js` exports `isConfigured`, and `js/firebase.js` exports
 >    `warnIfUnconfigured(host)`.** Every Firebase-backed page calls it first and renders a plain
 >    notice instead of an opaque SDK error. This is what lets Phase 1 and 2 ship before the Firebase
->    project exists. **Phase 2 pages must follow the same pattern.**
+>    project exists. **Phase 2 pages must follow the same pattern.** Both auth entry points are
+>    guarded: `onUser()` fires its callback with `{user: null, isAdmin: false}`, and `requireUser()`
+>    resolves `null` — it does **not** redirect. Without that second guard `admin.html`, which calls
+>    `requireUser()` as its first action, would hang forever on "Checking your permissions…",
+>    because `getAuth()` with a placeholder key never fires the callback.
 > 3. **`npm run test:rules` goes through `scripts/rules-tests.mjs`**, which locates a keg-only
 >    Homebrew JDK so contributors need not edit their shell config, and forces
 >    `--test-concurrency=1`. The concurrency flag is mandatory: the rules test files share one
@@ -954,6 +958,12 @@ Satisfies requirements 1 and 3, and establishes the rules test harness that ever
 > 6. **The rules were written as one file** covering config, admins, users, and
 >    `participants_public` together, rather than grown across Tasks 6/7/9. The test files stay split
 >    per collection.
+>
+> **Known looseness, accepted:** the rules check `edition is string` but cannot pin it to
+> `CURRENT_EDITION`, because rules cannot read `js/config.mjs`. A hand-rolled request could write
+> `edition: "pints2030"`. The blast radius is one orphan row that no page query returns, since every
+> list filters on `CURRENT_EDITION`. Pinning it would mean duplicating the edition string into
+> `firestore.rules` and remembering to change it in two places each year — a worse trade.
 
 ### Task 6: Firebase project, config, and the rules test harness
 

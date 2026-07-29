@@ -69,9 +69,21 @@ export function onUser(callback) {
   });
 }
 
-/** Resolve with the signed-in user, or redirect to the sign-in page. */
+/**
+ * Resolve with the signed-in user, or redirect to the sign-in page.
+ *
+ * Resolves `null` when Firebase is not configured — callers MUST handle that,
+ * or call warnIfUnconfigured() before reaching here. Without this guard the
+ * page hangs forever: getAuth() with a placeholder key never fires the callback,
+ * so the user stares at a spinner with no explanation.
+ */
 export function requireUser() {
   return new Promise((resolve) => {
+    if (!isConfigured) {
+      console.warn("[pints] requireUser() called before Firebase is configured");
+      resolve(null);
+      return;
+    }
     const stop = onAuthStateChanged(auth, (user) => {
       stop();
       if (user) resolve(user);
