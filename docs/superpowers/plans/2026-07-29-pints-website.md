@@ -67,7 +67,7 @@ Ships a live, organizer-editable site with no Firebase at all. Satisfies require
 - Consumes: nothing.
 - Produces: `CURRENT_EDITION: string`, `SITE_NAME: string`, `NAV: {href: string, label: string}[]`, `LIMITS: object`, `ABSTRACT_TYPES: string[]`, `ABSTRACT_STATUSES: string[]`, `SCHEDULE_KINDS: string[]` from `js/config.mjs`; `currentPageFile(pathname): string` and `markActive(nav, pathname): {href,label,active}[]` from `js/nav-utils.mjs`.
 
-- [ ] **Step 1: Create `.gitignore`**
+- [x] **Step 1: Create `.gitignore`**
 
 ```
 node_modules/
@@ -79,7 +79,7 @@ ui-debug.log
 *.swp
 ```
 
-- [ ] **Step 2: Create `.nojekyll`**
+- [x] **Step 2: Create `.nojekyll`**
 
 Empty file. Required so GitHub Pages serves paths beginning with `_` verbatim instead of running Jekyll.
 
@@ -87,7 +87,7 @@ Empty file. Required so GitHub Pages serves paths beginning with `_` verbatim in
 touch .nojekyll
 ```
 
-- [ ] **Step 3: Create `package.json`**
+- [x] **Step 3: Create `package.json`**
 
 ```json
 {
@@ -103,7 +103,7 @@ touch .nojekyll
     "vendor": "node scripts/vendor.mjs"
   },
   "devDependencies": {
-    "@firebase/rules-unit-testing": "^4.0.1",
+    "@firebase/rules-unit-testing": "^5.0.1",
     "dompurify": "^3.2.4",
     "firebase": "^12.16.0",
     "firebase-tools": "^14.0.0",
@@ -114,12 +114,12 @@ touch .nojekyll
 }
 ```
 
-- [ ] **Step 4: Install dependencies**
+- [x] **Step 4: Install dependencies**
 
 Run: `npm install`
-Expected: `node_modules/` created, no errors. If a version above no longer resolves, install the current major (`npm install -D marked dompurify jsdom http-server firebase firebase-tools @firebase/rules-unit-testing`) and let npm write the versions.
+Expected: `node_modules/` created, no errors. Note that `@firebase/rules-unit-testing` must be **v5**: v4 peers on `firebase@^11` and an `ERESOLVE` conflict with `firebase@^12` is the result. If any version above no longer resolves, install the current major (`npm install -D marked dompurify jsdom http-server firebase firebase-tools @firebase/rules-unit-testing`) and let npm write the versions.
 
-- [ ] **Step 5: Write the failing test**
+- [x] **Step 5: Write the failing test**
 
 Create `test/nav-utils.test.mjs`:
 
@@ -161,12 +161,12 @@ test("markActive does not mutate the input nav", () => {
 });
 ```
 
-- [ ] **Step 6: Run the test to verify it fails**
+- [x] **Step 6: Run the test to verify it fails**
 
 Run: `npm test`
 Expected: FAIL — `Cannot find module '.../js/nav-utils.mjs'`
 
-- [ ] **Step 7: Create `js/config.mjs`**
+- [x] **Step 7: Create `js/config.mjs`**
 
 ```javascript
 // Single source of truth for edition-scoped and site-wide constants.
@@ -199,7 +199,7 @@ export const ABSTRACT_STATUSES = ["submitted", "accepted", "rejected", "withdraw
 export const SCHEDULE_KINDS = ["keynote", "talk", "poster", "break", "lunch", "social", "other"];
 ```
 
-- [ ] **Step 8: Create `js/nav-utils.mjs`**
+- [x] **Step 8: Create `js/nav-utils.mjs`**
 
 ```javascript
 /** Resolve the served file name from a pathname, treating directories as index.html. */
@@ -215,12 +215,12 @@ export function markActive(nav, pathname) {
 }
 ```
 
-- [ ] **Step 9: Run the test to verify it passes**
+- [x] **Step 9: Run the test to verify it passes**
 
 Run: `npm test`
 Expected: PASS — 5 tests passing.
 
-- [ ] **Step 10: Commit**
+- [x] **Step 10: Commit**
 
 ```bash
 git add .gitignore .nojekyll package.json package-lock.json js/config.mjs js/nav-utils.mjs test/nav-utils.test.mjs
@@ -240,7 +240,7 @@ git commit -m "chore: scaffold repo with config, nav utils, and the node test lo
 - Consumes: nothing from earlier tasks.
 - Produces: `PAGE_ALLOWLIST`, `ABSTRACT_ALLOWLIST`, `renderMarkdown(src, {parse, sanitize, config}): string`, `renderPage(src, deps): string`, `renderAbstract(src, deps): string` from `js/markdown-render-utils.mjs`; browser-ready `renderPageHtml(src): string` and `renderAbstractHtml(src): string` from `js/markdown.js`.
 
-- [ ] **Step 1: Create `scripts/vendor.mjs`**
+- [x] **Step 1: Create `scripts/vendor.mjs`**
 
 ```javascript
 // Copies the ESM builds of our two runtime dependencies into vendor/ so the
@@ -259,12 +259,12 @@ for (const [from, to] of FILES) {
 }
 ```
 
-- [ ] **Step 2: Run it and verify the files land**
+- [x] **Step 2: Run it and verify the files land**
 
 Run: `npm run vendor && ls -l vendor`
 Expected: both `vendor/marked.esm.js` and `vendor/purify.es.mjs` exist and are non-empty. If either source path is missing, find the real one with `ls node_modules/marked/lib node_modules/dompurify/dist` and update `FILES`.
 
-- [ ] **Step 3: Write the failing test**
+- [x] **Step 3: Write the failing test**
 
 Create `test/markdown-render-utils.test.mjs`:
 
@@ -330,12 +330,12 @@ test("the abstract allowlist is exactly the intended tag set", () => {
 });
 ```
 
-- [ ] **Step 4: Run the test to verify it fails**
+- [x] **Step 4: Run the test to verify it fails**
 
 Run: `npm test`
 Expected: FAIL — `Cannot find module '.../js/markdown-render-utils.mjs'`
 
-- [ ] **Step 5: Create `js/markdown-render-utils.mjs`**
+- [x] **Step 5: Create `js/markdown-render-utils.mjs`**
 
 ```javascript
 /**
@@ -383,12 +383,12 @@ export function renderAbstract(src, deps) {
 }
 ```
 
-- [ ] **Step 6: Run the test to verify it passes**
+- [x] **Step 6: Run the test to verify it passes**
 
 Run: `npm test`
 Expected: PASS — all markdown tests green. The `<img>`/`javascript:`/`<script>` cases are the ones that matter; if any fails, the allowlist is wrong, not the test.
 
-- [ ] **Step 7: Create `js/markdown.js` (browser wiring)**
+- [x] **Step 7: Create `js/markdown.js` (browser wiring)**
 
 ```javascript
 import { marked } from "../vendor/marked.esm.js";
@@ -405,7 +405,7 @@ export const renderPageHtml = (src) => renderPage(src, deps);
 export const renderAbstractHtml = (src) => renderAbstract(src, deps);
 ```
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add scripts/vendor.mjs vendor js/markdown-render-utils.mjs js/markdown.js test/markdown-render-utils.test.mjs
@@ -423,7 +423,7 @@ git commit -m "feat: vendored markdown rendering with separate trusted and untru
 - Consumes: `NAV`, `SITE_NAME`, `SITE_TAGLINE` from `js/config.mjs`; `markActive` from `js/nav-utils.mjs`.
 - Produces: `mountLayout(): void` from `js/layout.js`, which fills `#site-header` and `#site-footer`. Every page calls it. Also `setAuthLink(state)` where `state` is `{signedIn: boolean, isAdmin: boolean}`, used from Phase 1 onward to swap the "Sign in" link for "My account" / "Admin".
 
-- [ ] **Step 1: Create `css/styles.css`**
+- [x] **Step 1: Create `css/styles.css`**
 
 ```css
 :root {
@@ -542,7 +542,7 @@ sup { font-size: .7em; }
 }
 ```
 
-- [ ] **Step 2: Create `js/layout.js`**
+- [x] **Step 2: Create `js/layout.js`**
 
 ```javascript
 import { NAV, SITE_NAME, SITE_TAGLINE } from "./config.mjs";
@@ -615,12 +615,12 @@ export function setAuthLink({ signedIn, isAdmin }) {
 }
 ```
 
-- [ ] **Step 3: Verify the unit suite still passes**
+- [x] **Step 3: Verify the unit suite still passes**
 
 Run: `npm test`
 Expected: PASS — layout is browser-only and untested here by design; its pure part (`markActive`) is already covered.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add css/styles.css js/layout.js
@@ -641,7 +641,7 @@ git commit -m "feat: site stylesheet and shared header/footer injection"
 - Consumes: `mountLayout` from `js/layout.js`; `renderPageHtml` from `js/markdown.js`.
 - Produces: the convention that any element with `data-markdown="content/foo.md"` is filled by `js/page-content.js`. Later pages reuse it.
 
-- [ ] **Step 1: Create `js/page-content.js`**
+- [x] **Step 1: Create `js/page-content.js`**
 
 ```javascript
 import { mountLayout } from "./layout.js";
@@ -667,7 +667,7 @@ for (const host of document.querySelectorAll("[data-markdown]")) {
 }
 ```
 
-- [ ] **Step 2: Create `index.html`**
+- [x] **Step 2: Create `index.html`**
 
 ```html
 <!doctype html>
@@ -699,7 +699,7 @@ for (const host of document.querySelectorAll("[data-markdown]")) {
 </html>
 ```
 
-- [ ] **Step 3: Create `about.html` and `venue.html`**
+- [x] **Step 3: Create `about.html` and `venue.html`**
 
 Both follow the same shape. `about.html`:
 
@@ -727,7 +727,7 @@ Both follow the same shape. `about.html`:
 
 `venue.html` is identical with `<title>Venue — PINTS</title>`, `<h1>Venue</h1>`, `data-markdown="content/venue.md"`, and description "How to reach the PINTS venue."
 
-- [ ] **Step 4: Create `404.html`**
+- [x] **Step 4: Create `404.html`**
 
 ```html
 <!doctype html>
@@ -750,7 +750,7 @@ Both follow the same shape. `about.html`:
 </html>
 ```
 
-- [ ] **Step 5: Create the shell pages linked from the nav**
+- [x] **Step 5: Create the shell pages linked from the nav**
 
 So no nav link 404s before its phase lands. Create `program.html`, `abstracts.html`, `participants.html`, `login.html`, `account.html`, `admin.html` using the `about.html` shape, each with its own `<title>`/`<h1>` and this body in place of the markdown div:
 
@@ -760,7 +760,7 @@ So no nav link 404s before its phase lands. Create `program.html`, `abstracts.ht
 
 Titles and headings: Program/Program, Abstracts/Abstracts, Participants/Registered participants, Sign in/Sign in, My account/My account, Admin/Admin console.
 
-- [ ] **Step 6: Create `content/home.md`**
+- [x] **Step 6: Create `content/home.md`**
 
 ```markdown
 PINTS is a one-day meeting that brings together the neuroscience, theory, and
@@ -785,7 +785,7 @@ Registration is free but required, so we can plan catering and poster boards.
 We gratefully acknowledge the support of DIM C-Brains, QLife, and Aquineuro.
 ```
 
-- [ ] **Step 7: Create `content/about.md`, `content/venue.md`, `content/poster-guidelines.md`**
+- [x] **Step 7: Create `content/about.md`, `content/venue.md`, `content/poster-guidelines.md`**
 
 `content/about.md`:
 
@@ -835,12 +835,12 @@ and fixings are provided. Find your board number in the
 [abstract list](abstracts.html) — it is assigned once your abstract is accepted.
 ```
 
-- [ ] **Step 8: Serve locally and check every page**
+- [x] **Step 8: Serve locally and check every page**
 
 Run: `npm run serve`, then open `http://127.0.0.1:4173/`.
 Expected: header and nav render on every page; the active nav item is underlined; `content/*.md` renders as HTML on home, about, and venue; the browser console is clean; no request 404s in the network tab.
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit**
 
 ```bash
 git add index.html about.html venue.html 404.html program.html abstracts.html participants.html login.html account.html admin.html content js/page-content.js
