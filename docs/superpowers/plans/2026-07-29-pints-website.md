@@ -16,7 +16,7 @@ Every task's requirements implicitly include this section.
 
 - **No build step.** Nothing may require compilation, bundling, or transpilation to serve the site. `npm` is dev-only tooling; the deployed site is the repo contents as-is.
 - **No Cloud Storage, no Cloud Functions, no Blaze plan.** Cloud Storage left the free Spark plan in February 2026. Nothing in this plan may introduce a billing requirement.
-- **All paths relative.** Never write a leading-slash path (`/css/…`) in HTML, JS, or markdown. The site may be served from `<owner>.github.io/pints/`. Every `.html` file lives at the repo root, so `css/styles.css`, `js/…`, `content/…`, `vendor/…` all resolve correctly.
+- **All paths relative.** Never write a leading-slash path (`/css/…`) in HTML, JS, or markdown. The site may be served from `<owner>.github.io/pints/`. Every `.html` file lives at the repo root, so `css/styles.css`, `js/…`, `content/…`, `vendor/…` all resolve correctly. **`404.html` is the sole exception:** GitHub Pages renders it at the *requested* URL, so a visitor hitting `/pints/typo` would have its relative paths resolve against `/pints/typo/` and 404. It is self-contained — inline CSS, no module imports, and a `<base href="/">` that must become `/<repo-name>/` if the site is served from a subpath.
 - **Firestore rules cannot filter fields.** Never attempt field-level read rules. Public subsets are separate projection collections.
 - **Public list pages need `allow read: if true`** (that is `get` *and* `list`). Never write rules that inspect `request.query`.
 - **Client-side sort, not `orderBy`.** List pages fetch by `edition` equality and sort through tested pure functions, avoiding composite-index setup.

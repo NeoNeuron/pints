@@ -9,9 +9,14 @@ Systems). No build step: the repository contents *are* the deployed site.
 
 ## Status
 
-Phase 0 (static site) is complete. Phases 1–3 — login, abstract submission and
-review, and the schedule editor — are specified in the plan but not yet built.
-The pages for those sections exist and currently say "not live yet".
+Phase 0 (static site) is complete **locally** and verified in a browser, but not
+yet deployed: the repository has no GitHub remote, so Pages has not been enabled
+and nothing has been checked against the live runtime. That is Task 5 Steps 2–5
+of the plan and needs someone to create the GitHub repository first.
+
+Phases 1–3 — login, abstract submission and review, and the schedule editor —
+are specified in the plan but not yet built. The pages for those sections exist
+and currently say "not live yet".
 
 ## Editing page content
 
@@ -52,6 +57,11 @@ npm run test:rules  # Firestore rules tests (Phase 1 onward; needs Java)
   runtime and no bundler.
 - **All paths are relative.** Never write a leading-slash path: the site may be
   served from `<owner>.github.io/pints/`, where absolute paths would 404.
+  **The single exception is `404.html`**, which Pages renders at the *requested*
+  URL rather than at the site root — relative paths there would resolve against
+  the bad URL. It is therefore self-contained, with inline CSS and a `<base>`
+  tag. If the site ends up on a subpath, that `<base href="/">` is the one line
+  that must change, to `/<repo-name>/`.
 
 ## Deployment
 

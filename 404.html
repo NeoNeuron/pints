@@ -5,15 +5,50 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Page not found — PINTS</title>
 <meta name="description" content="That page does not exist.">
-<link rel="stylesheet" href="css/styles.css">
+<!--
+  This page is deliberately self-contained: inline styles, no module imports,
+  no shared header injection.
+
+  GitHub Pages serves 404.html from the REQUESTED url's path, not from the site
+  root. A visitor hitting /pints/typo gets this file rendered at /pints/typo/,
+  where a relative "css/styles.css" resolves to /pints/typo/css/styles.css and
+  404s — the page would load unstyled with no navigation. This is the one file
+  in the repository that cannot use relative asset paths.
+
+  The <base> tag below is the only thing to change if the site is served from a
+  subpath: set it to "/<repo-name>/" instead of "/".
+-->
+<base href="/">
+<style>
+  :root { --ink:#1a1a1a; --muted:#5c5c5c; --line:#dcdcdc; --bg-soft:#f6f6f4; --accent:#7b1e3a; }
+  body { margin:0; font:16px/1.6 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; color:var(--ink); }
+  .wrap { max-width:62rem; margin:0 auto; padding:0 1.25rem; }
+  header { border-bottom:1px solid var(--line); background:var(--bg-soft); }
+  header .wrap { padding-block:1rem; }
+  .brand { font-weight:700; font-size:1.35rem; color:var(--ink); text-decoration:none; }
+  .brand small { display:block; font-weight:400; font-size:.78rem; color:var(--muted); }
+  main { padding-block:3rem; max-width:68ch; }
+  h1 { line-height:1.2; margin:0 0 1rem; }
+  a { color:var(--accent); }
+  ul { padding-left:1.2rem; }
+</style>
 </head>
 <body>
-<header id="site-header"></header>
+<header>
+  <div class="wrap">
+    <a class="brand" href="index.html">PINTS<small>Paris Ile-de-France Neuroscience, Theory, and Systems</small></a>
+  </div>
+</header>
 <main class="wrap">
   <h1>Page not found</h1>
-  <p class="prose">That page does not exist. Try the <a href="index.html">home page</a>.</p>
+  <p>That page does not exist. Try one of these instead:</p>
+  <ul>
+    <li><a href="index.html">Home</a></li>
+    <li><a href="program.html">Program</a></li>
+    <li><a href="abstracts.html">Abstracts</a></li>
+    <li><a href="venue.html">Venue</a></li>
+    <li><a href="about.html">About</a></li>
+  </ul>
 </main>
-<footer id="site-footer"></footer>
-<script type="module" src="js/page-content.js"></script>
 </body>
 </html>
