@@ -148,6 +148,47 @@ permitted to anyone on the internet. Change it only alongside its tests.
    (string, `pints2026`). Phase 2's rules call `get()` on this document; if it
    is missing, the rule errors and denies every submission.
 
+### Verification emails and institutional mail filters
+
+Abstract submission requires a verified email address, enforced in
+`firestore.rules` via `request.auth.token.email_verified`.
+
+**Known problem.** Firebase sends from `noreply@pints-conference.firebaseapp.com`.
+That domain has no SPF/DKIM alignment an institutional mail server trusts, so
+university filters routinely quarantine it. Tested 2026-07-29: a Gmail address
+received the message and verified successfully; an `@ens.psl.eu` address did
+not. The Firebase pipeline itself is fine — this is recipient-side filtering,
+and it will vary institution by institution.
+
+Two mitigations are already in place:
+
+- The unverified banner on `account.html` names the cause and points at the spam
+  or quarantine folder, and shows the error code if a resend fails.
+- Organizers are exempt from the gate, because `firestore.rules` already grants
+  admins `allow write: if isAdmin()` on abstracts. An organizer is never locked
+  out of their own submission by undelivered mail.
+
+**The real fix: send from a domain PINTS controls.**
+Per [Firebase's custom-domain guide](https://firebase.google.com/docs/auth/email-custom-domain):
+
+1. **Authentication → Templates**, click the edit icon on a template, then
+   **customize domain**.
+2. Enter the domain (e.g. `pints.example.org`).
+3. Add the **TXT** and **CNAME** records Firebase displays, at the registrar.
+   **Only one `v=spf1` TXT record is allowed per domain** — if the domain
+   already has one, merge the values into it rather than adding a second.
+4. Wait for verification, up to 24 hours. The Templates page shows a green
+   "Verification complete".
+5. Click **Apply Custom Domain**.
+
+Prerequisites: a domain PINTS owns, and someone able to edit its DNS. After
+applying, re-run the deliverability test from an institutional address before
+announcing submissions — a custom domain improves the odds substantially but
+does not guarantee every filter accepts it.
+
+**Unblocking one person in the meantime:** Firebase console →
+**Authentication → Users**, find them, and mark the address verified.
+
 ### Making someone an organizer
 
 1. **Authentication → Users** — find the person and copy their UID.
