@@ -354,7 +354,10 @@ export const PAGE_ALLOWLIST = {
     "table", "thead", "tbody", "tr", "th", "td", "img",
   ],
   ALLOWED_ATTR: ["href", "title", "src", "alt", "colspan", "rowspan"],
-  ALLOWED_URI_REGEXP: /^(?:https?:|mailto:|tel:|[^a-z]|[a-z+.-]+(?:[^a-z+.\-:]|$))/i,
+  // No ALLOWED_URI_REGEXP here on purpose: DOMPurify's own default is vetted and
+  // already blocks javascript:/data: URLs. Hand-copying a regex only risks
+  // getting it subtly wrong. The abstract allowlist below overrides it because
+  // that input is untrusted and we want https-only, which is stricter.
 };
 
 export const ABSTRACT_ALLOWLIST = {
