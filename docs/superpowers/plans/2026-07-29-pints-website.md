@@ -929,6 +929,32 @@ git add README.md && git commit -m "docs: record the live site URL" && git push
 
 Satisfies requirements 1 and 3, and establishes the rules test harness that everything after depends on.
 
+> **Status: code complete, deployed, dormant.** All Phase 1 code is written, committed, and live.
+> `firestore.rules` is covered by 32 emulator tests. What is **not** done is everything that
+> requires the Firebase console — creating the project, enabling Email/Password, adding authorized
+> domains, pasting the real config into `js/firebase-config.js`, deploying the rules, creating
+> `config/site`, and bootstrapping the first admin. The README carries that checklist.
+>
+> **Deviations from this plan, all deliberate:**
+>
+> 1. **`@firebase/rules-unit-testing` v5, not v4** — v4 peers on `firebase@^11` and ERESOLVEs.
+> 2. **`js/firebase-config.js` exports `isConfigured`, and `js/firebase.js` exports
+>    `warnIfUnconfigured(host)`.** Every Firebase-backed page calls it first and renders a plain
+>    notice instead of an opaque SDK error. This is what lets Phase 1 and 2 ship before the Firebase
+>    project exists. **Phase 2 pages must follow the same pattern.**
+> 3. **`npm run test:rules` goes through `scripts/rules-tests.mjs`**, which locates a keg-only
+>    Homebrew JDK so contributors need not edit their shell config, and forces
+>    `--test-concurrency=1`. The concurrency flag is mandatory: the rules test files share one
+>    emulator and each calls `clearFirestore()` in `beforeEach`, so parallel runs wipe the database
+>    mid-test — the symptom is a `RESOURCE_EXHAUSTED` error and a query hanging for ~10s.
+> 4. **`seedAdmin(env, uid)`** — helpers import `doc`/`setDoc` directly rather than taking them as
+>    arguments. A `seedConfig(env, {open, deadline})` helper was added for Phase 2.
+> 5. **Two extra rules tests** exercise the exact `writeBatch` that `saveProfile()` performs,
+>    proving the no-`get()` consent design instead of only arguing for it.
+> 6. **The rules were written as one file** covering config, admins, users, and
+>    `participants_public` together, rather than grown across Tasks 6/7/9. The test files stay split
+>    per collection.
+
 ### Task 6: Firebase project, config, and the rules test harness
 
 **Files:**
