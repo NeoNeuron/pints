@@ -67,7 +67,7 @@ function authorRow({ name = "", marks = "", presenting = false } = {}) {
   return tr;
 }
 
-export async function mountAbstractForm(host, { user, verified }) {
+export async function mountAbstractForm(host, { user, verified, isAdmin = false }) {
   host.hidden = false;
   host.innerHTML = TEMPLATE;
 
@@ -141,10 +141,18 @@ export async function mountAbstractForm(host, { user, verified }) {
   // would otherwise go stale. Rejected and withdrawn stay editable so the
   // participant can revise and resubmit before the deadline.
   const frozen = existing?.status === "accepted";
-  const editable = verified && windowOpen && !frozen;
 
-  if (!verified) say("Verify your email address before submitting.", "warn");
-  else if (frozen) say("This abstract has been accepted. Contact the organizers to change it.", "warn");
+  // Organizers are exempt from the verification gate and the submission window,
+  // because firestore.rules already grants them `allow write: if isAdmin()`.
+  // Gating them in the UI alone would be theatre, and it locks an organizer out
+  // of their own submission whenever verification mail is undeliverable.
+  const editable = (isAdmin || (verified && windowOpen)) && !frozen;
+
+  if (frozen) say("This abstract has been accepted. Contact the organizers to change it.", "warn");
+  else if (isAdmin && (!verified || !windowOpen)) {
+    say("You are an organizer, so you can submit even though "
+      + (!verified ? "your email is unverified" : "submissions are closed") + ".", "warn");
+  } else if (!verified) say("Verify your email address before submitting.", "warn");
   else if (!windowOpen) say("Submissions are closed. You can still read your abstract.", "warn");
   else if (existing?.status === "rejected") {
     say("This abstract was not accepted. You can revise and resubmit it before the deadline.", "warn");

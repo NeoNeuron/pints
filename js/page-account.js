@@ -21,7 +21,8 @@ if (warnIfUnconfigured(msg)) {
   form.hidden = true;
 } else {
   const user = await requireUser();
-  setAuthLink({ signedIn: true, isAdmin: await checkIsAdmin(user.uid) });
+  const isAdmin = await checkIsAdmin(user.uid);
+  setAuthLink({ signedIn: true, isAdmin });
 
   // Force a token refresh so email_verified is current. Clicking the
   // verification link does not update the token this tab already holds, and a
@@ -89,5 +90,6 @@ if (warnIfUnconfigured(msg)) {
   });
 
   const { mountAbstractForm } = await import("./abstract-form.js");
-  await mountAbstractForm(document.getElementById("abstract-section"), { user, verified });
+  await mountAbstractForm(document.getElementById("abstract-section"),
+    { user, verified, isAdmin });
 }
