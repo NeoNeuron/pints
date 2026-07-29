@@ -3627,6 +3627,25 @@ git commit -m "feat: participant admin tab with injection-safe CSV export"
 
 Satisfies requirement 4: an editable timetable that replaces the spreadsheet screenshot.
 
+> **Status: built, deployed, live.** Schedule editor, settings tab, and the public program page are
+> written, pushed, and their rules deployed. 58 rules tests and 56 unit tests pass. The settings tab
+> removes the last Firebase-console workaround: organizers can now open and close the submission
+> window and grant admin rights from the site.
+>
+> **Deploy-ordering hazard, learned the hard way.** The program page initially showed "Could not load
+> the program" against production while every emulator test passed — the schedule rules had not been
+> deployed yet, so the catch-all denied the read. **`firestore.rules` must be deployed before or with
+> the code that depends on it.** This is now called out in the README.
+>
+> **Deviations from this plan, all deliberate:**
+>
+> 1. **`formatDayHeading` parses and formats in UTC.** With local time, a user east of Greenwich late
+>    in the evening sees the day heading roll back a date. There is a test for it.
+> 2. **The settings tab converts the deadline to local wall-clock time** for `datetime-local`, which
+>    does not accept a UTC string.
+> 3. **Schedule rules allow a minimal item** — `edition`, `day`, `title`, `kind` — so a break or
+>    lunch row needs no speaker or location. Covered by a test.
+
 ### Task 17: Schedule domain logic
 
 **Files:**

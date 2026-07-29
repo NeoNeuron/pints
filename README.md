@@ -13,17 +13,31 @@ Systems). No build step: the repository contents *are* the deployed site.
 <https://neoneuron.github.io/pints/>. Every page and asset serves, markdown
 renders, the custom 404 works, and the browser console is clean.
 
-**Phases 1 and 2 are built, deployed, and live.** Accounts (sign up, sign in,
-password reset, email verification, opt-in public listing, participant list) and
-abstracts (submission with live preview, edit, withdraw, admin review with
-private notes, poster numbering, public abstract list with search, CSV export).
-Security rules are covered by 52 emulator tests, and 45 unit tests cover the
-pure logic.
+**All three phases are built, deployed, and live.** Every requirement in
+`CLAUDE.md` is implemented except the bonus mailing-list *sending*, which needs a
+paid Firebase plan; the CSV export stands in for it.
 
-**Phase 3 — the schedule editor and settings tab — is not built.** Its two admin
-tabs are stubs that point at the Firebase console. Until Phase 3 lands, opening
-and closing abstract submissions means editing `config/site` directly:
-set `submissionsOpen` (boolean) and `submissionDeadline` (timestamp).
+- **Accounts** — sign up, sign in, password reset, email verification, opt-in
+  public listing, participant list.
+- **Abstracts** — submission with live preview, edit, withdraw; admin review with
+  private notes, poster numbering, accept/reject/unpublish; public list with search.
+- **Schedule** — admin editor grouped by day; public program page.
+- **Settings** — open/close the submission window, set the deadline, grant admin
+  rights. No Firebase-console workarounds remain for day-to-day organizing.
+
+58 security-rules tests and 56 unit tests cover this.
+
+### Deploying rules — order matters
+
+**`firestore.rules` must be deployed *before or with* the code that depends on
+it.** Pushing a page that reads a new collection while the old ruleset is live
+gives users "Missing or insufficient permissions" even though the emulator tests
+pass. After changing rules:
+
+```bash
+npm run test:rules
+npx firebase deploy --only firestore:rules
+```
 
 The site content is still placeholder: the edition dates, venue, keynote, and
 organizer contacts all need filling in via `content/*.md`.
