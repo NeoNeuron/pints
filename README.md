@@ -69,8 +69,14 @@ npm run test:rules  # Firestore rules tests (Phase 1 onward; needs Java)
 ## Deployment
 
 GitHub Pages serves the `main` branch from the repository root. Pushing to
-`main` deploys. `.nojekyll` must stay in place — without it, Pages runs Jekyll
-and drops any path beginning with an underscore.
+`main` deploys. `.nojekyll` must stay in place — without it, Pages runs Jekyll,
+which drops any path beginning with an underscore and would transform
+`content/*.md` instead of serving it raw for the client-side renderer.
+
+**If the site URL ever changes** — moving to a PINTS org, or attaching a custom
+domain — `404.html`'s `<base href="/pints/">` must change to match. Nothing will
+appear broken: the 404 page still renders, its links just point at the wrong
+path. Verifying a deliberately bogus URL is therefore part of any such move.
 
 ## Firebase
 
