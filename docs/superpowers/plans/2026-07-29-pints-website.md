@@ -859,7 +859,7 @@ git commit -m "feat: static pages rendered from organizer-editable markdown"
 - Consumes: everything from Tasks 1–4.
 - Produces: a live URL. Record it in `README.md`; Phase 1 needs it for Firebase authorized domains.
 
-- [ ] **Step 1: Create `README.md`**
+- [x] **Step 1: Create `README.md`**
 
 ````markdown
 # PINTS conference website
@@ -896,26 +896,26 @@ GitHub Pages serves the `main` branch from the repository root. Pushing to
 _Filled in during Phase 1._
 ````
 
-- [ ] **Step 2: Commit and push**
+- [x] **Step 2: Commit and push**
 
 ```bash
 git add README.md
 git commit -m "docs: add README with the local dev and deploy runbook"
 git branch -M main
 # Create the repo on GitHub first if it does not exist, then:
-git remote add origin <REPO_URL>
+git remote add origin https://github.com/NeoNeuron/pints.git
 git push -u origin main
 ```
 
-- [ ] **Step 3: Enable GitHub Pages**
+- [x] **Step 3: Enable GitHub Pages**
 
 In the repository: **Settings → Pages → Source: Deploy from a branch → `main` / `/ (root)`**. Wait for the build, then open the URL.
 
-- [ ] **Step 4: Verify the deployed site**
+- [x] **Step 4: Verify the deployed site**
 
 Expected: every nav page loads over HTTPS, markdown renders, no console errors, and no 404s for `css/`, `js/`, `vendor/`, or `content/`. A 404 on those paths means an absolute path slipped in — fix it to be relative.
 
-- [ ] **Step 5: Record the live URL and commit**
+- [x] **Step 5: Record the live URL and commit**
 
 Replace `_fill in after enabling Pages_` in `README.md` with the real URL.
 

@@ -3,20 +3,23 @@
 Static site for the PINTS meeting (Paris Ile-de-France Neuroscience, Theory, and
 Systems). No build step: the repository contents *are* the deployed site.
 
-- **Live site:** _fill in after enabling Pages_
+- **Live site:** <https://neoneuron.github.io/pints/>
 - **Design spec:** `docs/superpowers/specs/2026-07-29-pints-website-design.md`
 - **Implementation plan:** `docs/superpowers/plans/2026-07-29-pints-website.md`
 
 ## Status
 
-Phase 0 (static site) is complete **locally** and verified in a browser, but not
-yet deployed: the repository has no GitHub remote, so Pages has not been enabled
-and nothing has been checked against the live runtime. That is Task 5 Steps 2–5
-of the plan and needs someone to create the GitHub repository first.
+**Phase 0 (static site) is complete and deployed** at
+<https://neoneuron.github.io/pints/>. Every page and asset serves, markdown
+renders, the custom 404 works, and the browser console is clean.
 
 Phases 1–3 — login, abstract submission and review, and the schedule editor —
 are specified in the plan but not yet built. The pages for those sections exist
-and currently say "not live yet".
+and currently say "not live yet". Phase 1 needs a Firebase project on the Spark
+plan, created by hand in the console.
+
+The site content is still placeholder: the edition dates, venue, keynote, and
+organizer contacts all need filling in via `content/*.md`.
 
 ## Editing page content
 
