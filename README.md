@@ -168,8 +168,47 @@ Two mitigations are already in place:
   admins `allow write: if isAdmin()` on abstracts. An organizer is never locked
   out of their own submission by undelivered mail.
 
-**The real fix: send from a domain PINTS controls.**
-Per [Firebase's custom-domain guide](https://firebase.google.com/docs/auth/email-custom-domain):
+There are two real fixes. Both make the mail pass SPF/DKIM/DMARC, which is what
+institutional filters actually check.
+
+#### Option A — send through a Gmail account (no domain needed)
+
+Mail genuinely originates from Gmail, DKIM-signed by Google for `gmail.com`, so
+it passes DMARC. This is the only legitimate way to have a `@gmail.com` sender:
+**you cannot simply set the From field to a Gmail address.** Firebase's
+custom-domain flow verifies ownership through DNS records, and nobody can add
+records to `gmail.com`. Claiming a Gmail From without sending through Gmail
+fails DMARC alignment and is treated *worse* than the current default.
+
+1. **Upgrade to Firebase Authentication with Identity Platform** —
+   Firebase console → **Authentication → Settings**. Custom SMTP is an Identity
+   Platform feature. On Spark this stays free but caps at **3,000 daily active
+   users**; a one-day meeting is nowhere near that. Google documents no
+   downgrade path, so treat the upgrade as one-way.
+2. **Generate a Gmail app password** — <https://myaccount.google.com> →
+   **Security**. 2-Step Verification must be on, then **App passwords** → create
+   one for Mail. It is a 16-character string.
+3. **Configure custom SMTP** — Firebase console → **Authentication → Templates**
+   (or Google Cloud console → Identity Platform → Settings → Email):
+   | Field | Value |
+   |---|---|
+   | Sender email | the Gmail address |
+   | Host | `smtp.gmail.com` |
+   | Port / security | `465` with SSL, or `587` with START_TLS |
+   | Username | the same Gmail address |
+   | Password | the app password from step 2 |
+4. Set **Sender display name** to `PINTS Conference`, and **Reply-to** to
+   whichever address should receive replies.
+
+Caveats: a consumer Gmail account is limited to roughly **500 messages a day**,
+which is ample here. The app password grants permission to send mail as that
+account — paste it only into the Firebase console, never into the repository,
+and revoke it from the Google account page if the organizer changes.
+
+#### Option B — send from a domain PINTS controls
+
+Better long-term, and looks more official than a personal Gmail on the From
+line. Per [Firebase's custom-domain guide](https://firebase.google.com/docs/auth/email-custom-domain):
 
 1. **Authentication → Templates**, click the edit icon on a template, then
    **customize domain**.
@@ -177,14 +216,18 @@ Per [Firebase's custom-domain guide](https://firebase.google.com/docs/auth/email
 3. Add the **TXT** and **CNAME** records Firebase displays, at the registrar.
    **Only one `v=spf1` TXT record is allowed per domain** — if the domain
    already has one, merge the values into it rather than adding a second.
+   Adding a second silently breaks SPF for *all* mail from that domain.
 4. Wait for verification, up to 24 hours. The Templates page shows a green
    "Verification complete".
 5. Click **Apply Custom Domain**.
 
-Prerequisites: a domain PINTS owns, and someone able to edit its DNS. After
-applying, re-run the deliverability test from an institutional address before
-announcing submissions — a custom domain improves the odds substantially but
-does not guarantee every filter accepts it.
+Prerequisites: a domain PINTS owns, and someone able to edit its DNS. A
+freshly-registered domain also starts with no sender reputation, which some
+filters weigh.
+
+**Whichever option you pick, re-run the deliverability test from an
+`@ens.psl.eu` address before announcing that submissions are open.** Neither
+option guarantees every institutional filter accepts the mail.
 
 **Unblocking one person in the meantime:** Firebase console →
 **Authentication → Users**, find them, and mark the address verified.
