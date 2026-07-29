@@ -5,3 +5,4 @@ firestore-debug.log
 ui-debug.log
 .DS_Store
 *.swp
+.claude/
