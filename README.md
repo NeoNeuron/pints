@@ -99,6 +99,21 @@ domain — `404.html`'s `<base href="/pints/">` must change to match. Nothing wi
 appear broken: the 404 page still renders, its links just point at the wrong
 path. Verifying a deliberately bogus URL is therefore part of any such move.
 
+### Caching after a deploy
+
+GitHub Pages serves assets with `cache-control: max-age=600`, so a returning
+visitor can run up to ten minutes of stale JavaScript after a push. It
+self-heals; just don't conclude a fix failed within that window.
+
+One asymmetry is worth knowing when testing: a hard reload revalidates the
+document and its **statically** imported modules, but a runtime
+`await import(...)` is an ordinary fetch that honours the HTTP cache, so a
+dynamically imported module can stay stale *through* a hard reload. Prefer a
+static import for anything a page always needs. The admin console's tab modules
+are still dynamic — that lazy loading is deliberate, since only one tab is
+opened at a time — so when testing an admin tab, confirm with
+`fetch(url, {cache:'reload'})` rather than trusting a hard reload.
+
 ## Firebase
 
 **Not yet created.** The accounts code is written, deployed, and its security

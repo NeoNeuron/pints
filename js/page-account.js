@@ -2,6 +2,12 @@ import { mountLayout, setAuthLink } from "./layout.js";
 import { warnIfUnconfigured } from "./firebase.js";
 import { checkIsAdmin, refreshVerification, requireUser, sendVerification, signOutNow } from "./auth.js";
 import { getProfile, saveProfile } from "./db.js";
+// Static, not a runtime import(): this page always needs the form, and a
+// dynamically imported module is fetched with ordinary HTTP-cache semantics,
+// so it survives a hard reload as a stale copy for up to GitHub Pages'
+// 10-minute max-age. Static imports are part of the module graph and are
+// revalidated with the document.
+import { mountAbstractForm } from "./abstract-form.js";
 
 mountLayout();
 
@@ -89,7 +95,6 @@ if (warnIfUnconfigured(msg)) {
     location.replace("index.html");
   });
 
-  const { mountAbstractForm } = await import("./abstract-form.js");
   await mountAbstractForm(document.getElementById("abstract-section"),
     { user, verified, isAdmin });
 }
