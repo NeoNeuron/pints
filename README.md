@@ -13,10 +13,14 @@ Systems). No build step: the repository contents *are* the deployed site.
 <https://neoneuron.github.io/pints/>. Every page and asset serves, markdown
 renders, the custom 404 works, and the browser console is clean.
 
-Phases 1–3 — login, abstract submission and review, and the schedule editor —
-are specified in the plan but not yet built. The pages for those sections exist
-and currently say "not live yet". Phase 1 needs a Firebase project on the Spark
-plan, created by hand in the console.
+**Phase 1 (accounts) is built and deployed** — sign up, sign in, password reset,
+email verification, the account page with opt-in public listing, and the
+participant list. Its security rules are covered by 32 emulator tests. It is
+**dormant until the Firebase project is created**: see the Firebase section
+below. Until then the account pages say so plainly rather than erroring.
+
+Phases 2–3 — abstract submission and review, and the schedule editor — are
+specified in the plan but not yet built.
 
 The site content is still placeholder: the edition dates, venue, keynote, and
 organizer contacts all need filling in via `content/*.md`.
@@ -80,12 +84,43 @@ path. Verifying a deliberately bogus URL is therefore part of any such move.
 
 ## Firebase
 
-_Not yet configured. Phase 1 of the implementation plan covers this._
+**Not yet created.** The accounts code is written, deployed, and its security
+rules are tested — but until the steps below are done, every account page shows
+"Accounts are not switched on yet" instead of failing with an SDK error.
 
-Two things that will matter when it is:
+`firestore.rules` is the **only** authorization boundary: the site is a static
+page with no server in front of it, so anything the rules do not forbid is
+permitted to anyone on the internet. Change it only alongside its tests.
 
-- The project must stay on the **Spark (free)** plan. Do not enable Cloud
-  Storage or Cloud Functions — both require Blaze and a credit card.
-- Every host that serves the site must be listed under **Authentication →
-  Settings → Authorized domains**, or sign-in fails with an opaque
-  `auth/unauthorized-domain` error.
+### One-time setup
+
+1. <https://console.firebase.google.com> → **Add project**, name it
+   `pints-conference`. Analytics off. **Stay on the Spark (free) plan — do not
+   enable Cloud Storage or Cloud Functions.** Both require Blaze and a credit
+   card, and nothing here needs them.
+2. **Build → Firestore Database → Create database → Production mode**, location
+   `eur3 (europe-west)`.
+3. **Build → Authentication → Get started → Sign-in method → Email/Password →
+   Enable.** Leave "Email link" off.
+4. **Authentication → Settings → Authorized domains → Add domain** →
+   `neoneuron.github.io`. Add `localhost` and `127.0.0.1` too, for local work.
+   *Skipping this makes every sign-in fail with `auth/unauthorized-domain`.*
+5. **Project settings → General → Your apps → Web (`</>`)**, register the app,
+   copy the `firebaseConfig` object, and paste it over the placeholders in
+   `js/firebase-config.js`. That file is public by design — the web API key
+   identifies the project, it is not a credential.
+6. Deploy the rules: `npx firebase login && npx firebase use --add` (pick the
+   project), then `npx firebase deploy --only firestore:rules`.
+7. In Firestore, create collection `config`, document ID `site`, with fields
+   `submissionsOpen` (boolean), `submissionDeadline` (timestamp), and `edition`
+   (string, `pints2026`). Phase 2's rules call `get()` on this document; if it
+   is missing, the rule errors and denies every submission.
+
+### Making someone an organizer
+
+1. **Authentication → Users** — find the person and copy their UID.
+2. **Firestore → `admins`** — add a document whose **ID is that UID**, with
+   fields `email` (string), `addedBy` (string), `addedAt` (timestamp).
+
+The first admin must be created this way. After that, admins can add each other
+from the admin console (Phase 3).
