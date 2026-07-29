@@ -15,10 +15,13 @@
   404s — the page would load unstyled with no navigation. This is the one file
   in the repository that cannot use relative asset paths.
 
-  The <base> tag below is the only thing to change if the site is served from a
-  subpath: set it to "/<repo-name>/" instead of "/".
+  The <base> tag below is the only thing to change if the site moves: it must
+  match the path the site is served from. Currently NeoNeuron/pints on GitHub
+  Pages, i.e. https://neoneuron.github.io/pints/ — hence "/pints/". If the site
+  later moves to a PINTS org or a custom domain and is served at the root,
+  change it back to "/".
 -->
-<base href="/">
+<base href="/pints/">
 <style>
   :root { --ink:#1a1a1a; --muted:#5c5c5c; --line:#dcdcdc; --bg-soft:#f6f6f4; --accent:#7b1e3a; }
   body { margin:0; font:16px/1.6 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; color:var(--ink); }
