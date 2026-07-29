@@ -1,6 +1,6 @@
 import test, { after, before, beforeEach } from "node:test";
 import { assertFails, assertSucceeds } from "@firebase/rules-unit-testing";
-import { collection, deleteDoc, doc, getDocs, setDoc } from "firebase/firestore";
+import { collection, deleteDoc, doc, getDocs, setDoc, writeBatch } from "firebase/firestore";
 import { asAnon, asUser, makeTestEnv, seed, seedAdmin } from "./helpers.mjs";
 
 let env;
@@ -69,4 +69,38 @@ test("an admin can remove any public entry", async () => {
   await seedAdmin(env, "boss");
   await seed(env, (fs) => setDoc(doc(fs, "participants_public", "bob"), pub()));
   await assertSucceeds(deleteDoc(doc(asUser(env, "boss"), "participants_public", "bob")));
+});
+
+// These two exercise exactly what js/db.js saveProfile() does. They are the
+// reason the participants_public rule deliberately has no get() on
+// users/{uid}.showPublicly: a get() reads pre-batch committed state, so the
+// very first opt-in — where the profile does not exist yet — would be denied.
+const profile = (over = {}) => ({
+  email: "alice@example.org",
+  displayName: "Alice Dupont",
+  affiliation: "ENS",
+  showPublicly: true,
+  edition: "pints2026",
+  updatedAt: new Date(),
+  ...over,
+});
+
+test("opting in writes the profile and the public entry in one batch", async () => {
+  const fs = asUser(env, "alice", { email: "alice@example.org" });
+  const batch = writeBatch(fs);
+  batch.set(doc(fs, "users", "alice"), profile(), { merge: true });
+  batch.set(doc(fs, "participants_public", "alice"), pub());
+  await assertSucceeds(batch.commit());
+});
+
+test("opting out clears the profile flag and deletes the public entry in one batch", async () => {
+  await seed(env, async (fs) => {
+    await setDoc(doc(fs, "users", "alice"), profile());
+    await setDoc(doc(fs, "participants_public", "alice"), pub());
+  });
+  const fs = asUser(env, "alice", { email: "alice@example.org" });
+  const batch = writeBatch(fs);
+  batch.set(doc(fs, "users", "alice"), profile({ showPublicly: false }), { merge: true });
+  batch.delete(doc(fs, "participants_public", "alice"));
+  await assertSucceeds(batch.commit());
 });

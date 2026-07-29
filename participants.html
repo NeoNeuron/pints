@@ -11,9 +11,19 @@
 <header id="site-header"></header>
 <main class="wrap">
   <h1>Registered participants</h1>
-  <p class="msg warn">This section is not live yet.</p>
+  <p class="prose muted">People who chose to have their name listed. Registered
+    participants can opt in or out at any time from
+    <a href="account.html">their account page</a>.</p>
+  <p id="count" class="muted"></p>
+  <div id="msg" class="msg" role="status" aria-live="polite"></div>
+  <div class="table-scroll">
+    <table>
+      <thead><tr><th scope="col">Name</th><th scope="col">Affiliation</th></tr></thead>
+      <tbody id="rows"></tbody>
+    </table>
+  </div>
 </main>
 <footer id="site-footer"></footer>
-<script type="module" src="js/page-content.js"></script>
+<script type="module" src="js/page-participants.js"></script>
 </body>
 </html>

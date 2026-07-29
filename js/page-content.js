@@ -1,7 +1,11 @@
-import { mountLayout } from "./layout.js";
+import { mountLayout, setAuthLink } from "./layout.js";
 import { renderPageHtml } from "./markdown.js";
+import { onUser } from "./auth.js";
 
 mountLayout();
+
+// Keep the header's "Sign in" link in step with auth state on the static pages.
+onUser(({ user, isAdmin }) => setAuthLink({ signedIn: Boolean(user), isAdmin }));
 
 /** Fill every [data-markdown] element from its markdown file. */
 for (const host of document.querySelectorAll("[data-markdown]")) {

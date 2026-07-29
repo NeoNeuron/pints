@@ -11,9 +11,35 @@
 <header id="site-header"></header>
 <main class="wrap">
   <h1>Sign in</h1>
-  <p class="msg warn">This section is not live yet.</p>
+  <p class="prose muted">Registration is free. You need an account to register for
+    PINTS and to submit a poster abstract.</p>
+
+  <div id="msg" class="msg" role="status" aria-live="polite"></div>
+
+  <form id="auth-form" novalidate>
+    <label for="email">Email
+      <span class="hint">Use your institutional address if you have one.</span>
+    </label>
+    <input id="email" name="email" type="email" autocomplete="email" required>
+
+    <label for="password">Password
+      <span class="hint">At least 6 characters.</span>
+    </label>
+    <input id="password" name="password" type="password" autocomplete="current-password" required>
+
+    <div class="checkline">
+      <input id="remember" type="checkbox" checked>
+      <label for="remember">Remember me on this device</label>
+    </div>
+
+    <div class="actions">
+      <button id="signin" type="submit">Sign in</button>
+      <button id="signup" type="button" class="secondary">Create an account</button>
+      <button id="reset" type="button" class="secondary">Forgot password</button>
+    </div>
+  </form>
 </main>
 <footer id="site-footer"></footer>
-<script type="module" src="js/page-content.js"></script>
+<script type="module" src="js/page-login.js"></script>
 </body>
 </html>

@@ -11,9 +11,40 @@
 <header id="site-header"></header>
 <main class="wrap">
   <h1>My account</h1>
-  <p class="msg warn">This section is not live yet.</p>
+  <div id="verify-banner" class="msg warn" hidden></div>
+  <div id="msg" class="msg" role="status" aria-live="polite"></div>
+
+  <section>
+    <h2>Registration details</h2>
+    <form id="profile-form" novalidate>
+      <label for="displayName">Full name
+        <span class="hint">As you want it to appear on the participant list.</span>
+      </label>
+      <input id="displayName" type="text" maxlength="80" autocomplete="name" required>
+
+      <label for="affiliation">Affiliation
+        <span class="hint">Lab, institute, or university. Optional.</span>
+      </label>
+      <input id="affiliation" type="text" maxlength="120" autocomplete="organization">
+
+      <div class="checkline">
+        <input id="showPublicly" type="checkbox">
+        <label for="showPublicly">Show my name and affiliation on the public
+          <a href="participants.html">participant list</a>
+          <span class="hint">You can turn this off at any time; your entry is removed immediately.</span>
+        </label>
+      </div>
+
+      <div class="actions">
+        <button type="submit">Save</button>
+        <button type="button" id="signout" class="secondary">Sign out</button>
+      </div>
+    </form>
+  </section>
+
+  <section id="abstract-section" hidden></section>
 </main>
 <footer id="site-footer"></footer>
-<script type="module" src="js/page-content.js"></script>
+<script type="module" src="js/page-account.js"></script>
 </body>
 </html>
