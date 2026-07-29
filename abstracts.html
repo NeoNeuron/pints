@@ -11,9 +11,18 @@
 <header id="site-header"></header>
 <main class="wrap">
   <h1>Abstracts</h1>
-  <p class="msg warn">This section is not live yet.</p>
+  <div class="prose" data-markdown="content/poster-guidelines.md"></div>
+  <p>
+    <label for="q">Search
+      <span class="hint">Matches titles, authors, affiliations, and abstract text.</span>
+    </label>
+    <input id="q" type="text" autocomplete="off">
+  </p>
+  <p id="count" class="muted"></p>
+  <div id="msg" class="msg" role="status" aria-live="polite"></div>
+  <div id="list"></div>
 </main>
 <footer id="site-footer"></footer>
-<script type="module" src="js/page-content.js"></script>
+<script type="module" src="js/page-abstracts.js"></script>
 </body>
 </html>

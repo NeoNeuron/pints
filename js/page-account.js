@@ -75,4 +75,7 @@ if (warnIfUnconfigured(msg)) {
     await signOutNow();
     location.replace("index.html");
   });
+
+  const { mountAbstractForm } = await import("./abstract-form.js");
+  await mountAbstractForm(document.getElementById("abstract-section"), { user, verified });
 }
