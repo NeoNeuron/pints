@@ -38,6 +38,9 @@ a { color: var(--accent); }
 .site-nav a:hover { color: var(--ink); }
 .site-nav a[aria-current="page"] { color: var(--ink); border-bottom-color: var(--accent); }
 .site-nav a.auth-link { color: var(--accent); font-weight: 600; }
+/* display:contents so the links inside become flex items of .site-nav and pick
+   up its gap, rather than bunching together inside the wrapper. */
+.site-nav .auth-links { display: contents; }
 
 /* Footer */
 .site-footer { margin-top: 4rem; border-top: 1px solid var(--line); background: var(--bg-soft); }

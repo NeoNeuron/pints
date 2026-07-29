@@ -52,16 +52,33 @@ if (warnIfUnconfigured(msg)) {
   document.getElementById("signup").addEventListener("click", () =>
     run(async () => {
       justSignedUp = true;
-      await signUp(emailEl.value.trim(), passwordEl.value, rememberEl.checked);
-      msg.className = "msg ok";
+      const { verificationSent } = await signUp(
+        emailEl.value.trim(), passwordEl.value, rememberEl.checked);
+
       const link = document.createElement("a");
       link.href = "account.html";
       link.textContent = "complete your registration";
-      msg.replaceChildren(
-        document.createTextNode("Account created. Check your inbox for a verification link, then "),
-        link,
-        document.createTextNode("."),
-      );
+
+      if (verificationSent) {
+        msg.className = "msg ok";
+        msg.replaceChildren(
+          document.createTextNode(
+            "Account created. Check your inbox — and your spam folder — for a verification link, then "),
+          link,
+          document.createTextNode("."),
+        );
+      } else {
+        // The account exists; only the mail failed. Say so, or they will try to
+        // sign up again and hit "email already in use".
+        msg.className = "msg warn";
+        msg.replaceChildren(
+          document.createTextNode(
+            "Account created, but the verification email could not be sent. "
+            + "You are signed in — "),
+          link,
+          document.createTextNode(" and use “Resend the verification email” there."),
+        );
+      }
     }));
 
   document.getElementById("reset").addEventListener("click", () =>

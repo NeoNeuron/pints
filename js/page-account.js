@@ -29,21 +29,33 @@ if (warnIfUnconfigured(msg)) {
   const verified = await refreshVerification(user);
   if (!verified) {
     banner.hidden = false;
-    banner.textContent = "Your email is not verified yet. ";
+    const explain = document.createElement("p");
+    explain.style.margin = "0 0 .5rem";
+    explain.textContent =
+      "Your email address is not verified yet, so you cannot submit an abstract. "
+      + "The message comes from a firebaseapp.com address — check your spam or "
+      + "quarantine folder, since some university mail servers hold it there.";
+
     const again = document.createElement("button");
     again.type = "button";
     again.className = "secondary";
     again.textContent = "Resend the verification email";
     again.addEventListener("click", async () => {
+      again.disabled = true;
       try {
         await sendVerification(user);
-        say("Verification email sent.", "ok");
+        say("Verification email sent. Check your spam folder too.", "ok");
       } catch (err) {
-        say("Could not send the verification email. Try again in a few minutes.", "err");
+        // Surface the code: auth/too-many-requests is common and self-resolving,
+        // and the distinction matters when debugging deliverability.
+        say(`Could not send the verification email (${err?.code ?? "unknown"}). `
+          + "If this keeps happening, ask an organizer.", "err");
         console.error("[pints] sendVerification", err);
+      } finally {
+        again.disabled = false;
       }
     });
-    banner.append(again);
+    banner.replaceChildren(explain, again);
   }
 
   const profile = await getProfile(user.uid);

@@ -30,12 +30,15 @@ export function mountLayout() {
     nav.setAttribute("aria-label", "Main");
     for (const item of markActive(NAV, location.pathname)) nav.append(navLink(item));
 
-    const auth = document.createElement("a");
-    auth.className = "auth-link";
-    auth.id = "auth-link";
-    auth.href = "login.html";
-    auth.textContent = "Sign in";
-    nav.append(auth);
+    // A container, not a single link: an organizer is also a participant and
+    // needs both "My account" and "Admin".
+    const authLinks = document.createElement("span");
+    authLinks.className = "auth-links";
+    authLinks.id = "auth-links";
+    // Signed-out state renders immediately; setAuthLink() replaces it once
+    // Firebase resolves, so the header is never blank.
+    authLinks.append(authLink("login.html", "Sign in"));
+    nav.append(authLinks);
 
     wrap.append(brand, nav);
     header.replaceChildren(wrap);
@@ -51,18 +54,32 @@ export function mountLayout() {
   }
 }
 
+function authLink(href, label) {
+  const a = document.createElement("a");
+  a.className = "auth-link";
+  a.href = href;
+  a.textContent = label;
+  return a;
+}
+
 /**
- * Swap the header auth link once auth state is known.
- * Phase 0 never calls this; Phase 1 onward does.
+ * Rebuild the header auth links once auth state is known.
+ *
+ * Admins get BOTH links. An organizer is also a participant: they need to set
+ * their own display name and submit their own abstract, and with only an
+ * "Admin" link there is no route to account.html at all.
  */
 export function setAuthLink({ signedIn, isAdmin }) {
-  const link = document.getElementById("auth-link");
-  if (!link) return;
+  const host = document.getElementById("auth-links");
+  if (!host) return;
   if (!signedIn) {
-    link.href = "login.html";
-    link.textContent = "Sign in";
+    host.replaceChildren(authLink("login.html", "Sign in"));
+  } else if (isAdmin) {
+    host.replaceChildren(
+      authLink("account.html", "My account"),
+      authLink("admin.html", "Admin"),
+    );
   } else {
-    link.href = isAdmin ? "admin.html" : "account.html";
-    link.textContent = isAdmin ? "Admin" : "My account";
+    host.replaceChildren(authLink("account.html", "My account"));
   }
 }

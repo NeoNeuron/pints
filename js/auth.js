@@ -15,11 +15,37 @@ import { auth, db, isConfigured } from "./firebase.js";
 const persistenceFor = (remember) =>
   setPersistence(auth, remember ? browserLocalPersistence : browserSessionPersistence);
 
+/**
+ * Where Firebase sends people after they click a verification link. Without
+ * this they land on a bare Firebase-hosted confirmation page with no way back
+ * to the site. The host must be listed under Auth → Authorized domains.
+ */
+const returnToAccount = () => ({
+  url: new URL("account.html", location.href).href,
+  handleCodeInApp: false,
+});
+
+export const sendVerification = (user) => sendEmailVerification(user, returnToAccount());
+
+/**
+ * Create the account, then try to send the verification email.
+ *
+ * A mail failure must NOT look like a signup failure: the account already
+ * exists at that point, so surfacing the error as-is sends people back to
+ * "Create an account", where they hit `auth/email-already-in-use` and conclude
+ * the site is broken. Resolves with a flag instead so the caller can say what
+ * actually happened.
+ */
 export async function signUp(email, password, remember) {
   await persistenceFor(remember);
   const { user } = await createUserWithEmailAndPassword(auth, email, password);
-  await sendEmailVerification(user);
-  return user;
+  try {
+    await sendVerification(user);
+    return { user, verificationSent: true };
+  } catch (err) {
+    console.error("[pints] sendEmailVerification failed after signup", err);
+    return { user, verificationSent: false, error: err };
+  }
 }
 
 export async function signIn(email, password, remember) {
@@ -30,7 +56,6 @@ export async function signIn(email, password, remember) {
 
 export const signOutNow = () => signOut(auth);
 export const sendReset = (email) => sendPasswordResetEmail(auth, email);
-export const sendVerification = (user) => sendEmailVerification(user);
 
 /**
  * Pull a fresh ID token so request.auth.token.email_verified reflects reality.
