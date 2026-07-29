@@ -116,11 +116,16 @@ confidentiality: a user can only ever publish their own name. The existence of t
 
 ### Freezing an abstract on acceptance
 
-Rules allow the owner to update or delete `abstracts/{uid}` **only while
-`resource.data.status == "submitted"`**. Without this, two silent leaks appear: an owner editing
-after acceptance leaves `abstracts_public/{uid}` showing a stale title and body, and an owner
-withdrawing after acceptance leaves the public copy up forever. Post-acceptance changes and
-withdrawals go through the admin console, which updates both documents together.
+Rules allow the owner to update or delete `abstracts/{uid}` **unless `status == "accepted"`**.
+Without this, two silent leaks appear: an owner editing after acceptance leaves
+`abstracts_public/{uid}` showing a stale title and body, and an owner withdrawing after acceptance
+leaves the public copy up forever. Post-acceptance changes and withdrawals go through the admin
+console, which updates both documents together.
+
+The freeze covers `accepted` **only**. Freezing every non-`submitted` status would trap a rejected
+participant with a document they can neither revise, delete, nor replace — the document ID is their
+UID, so there is no second slot — for the rest of the edition, even with weeks left before the
+deadline. `rejected` and `withdrawn` stay editable, and an edit resets the status to `submitted`.
 
 ### Submission window
 

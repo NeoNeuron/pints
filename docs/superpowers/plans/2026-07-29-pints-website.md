@@ -1508,9 +1508,13 @@ async function run(fn) {
   }
 }
 
+// Signing up changes auth state, which would immediately redirect and discard
+// the "check your inbox" message. Hold the user here until they choose to move on.
+let justSignedUp = false;
+
 onUser(({ user, isAdmin }) => {
   setAuthLink({ signedIn: Boolean(user), isAdmin });
-  if (user) location.replace(isAdmin ? "admin.html" : "account.html");
+  if (user && !justSignedUp) location.replace(isAdmin ? "admin.html" : "account.html");
 });
 
 form.addEventListener("submit", (e) => {
@@ -1520,8 +1524,17 @@ form.addEventListener("submit", (e) => {
 
 document.getElementById("signup").addEventListener("click", () =>
   run(async () => {
+    justSignedUp = true;
     await signUp(emailEl.value.trim(), passwordEl.value, rememberEl.checked);
-    say("Account created. Check your inbox for a verification link.", "ok");
+    msg.className = "msg ok";
+    const link = document.createElement("a");
+    link.href = "account.html";
+    link.textContent = "complete your registration";
+    msg.replaceChildren(
+      document.createTextNode("Account created. Check your inbox for a verification link, then "),
+      link,
+      document.createTextNode("."),
+    );
   }));
 
 document.getElementById("reset").addEventListener("click", () =>
@@ -1533,15 +1546,28 @@ document.getElementById("reset").addEventListener("click", () =>
   }));
 ```
 
-- [ ] **Step 4: Verify manually**
+- [ ] **Step 4: Teach the static pages about auth state**
+
+`js/page-content.js` was written in Phase 0, before Firebase existed, so its header always reads "Sign in". Now that `auth.js` exists, add the subscription. Insert after the `mountLayout();` line in `js/page-content.js`:
+
+```javascript
+import { onUser } from "./auth.js";
+import { setAuthLink } from "./layout.js";
+
+onUser(({ user, isAdmin }) => setAuthLink({ signedIn: Boolean(user), isAdmin }));
+```
+
+Merge the `setAuthLink` import into the existing `./layout.js` import line rather than adding a second one. This is the reason Phase 0 could not do it: importing `auth.js` pulls in `firebase-config.js`, which did not exist yet.
+
+- [ ] **Step 5: Verify manually**
 
 Run: `npm run serve`, open `http://127.0.0.1:4173/login.html`.
-Expected: creating an account sends a verification email and redirects to `account.html` (which is still a shell); a wrong password shows "Wrong email or password."; the header link becomes "My account". If you see `auth/unauthorized-domain` for `127.0.0.1`, add `127.0.0.1` and `localhost` to the Firebase authorized domains list.
+Expected: creating an account shows "Account created. Check your inbox…" with a link onward (no immediate redirect); signing in redirects to `account.html`; a wrong password shows "Wrong email or password."; the header link reads "My account" on `index.html` and the other static pages while signed in. If you see `auth/unauthorized-domain` for `127.0.0.1`, add `127.0.0.1` and `localhost` to the Firebase authorized domains list.
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 6: Commit**
 
 ```bash
-git add js/auth.js js/page-login.js login.html
+git add js/auth.js js/page-login.js js/page-content.js login.html
 git commit -m "feat: email/password auth with verification, reset, and persistence toggle"
 ```
 
@@ -2460,7 +2486,31 @@ test("an owner CANNOT edit or delete once accepted", async () => {
   await seed(env, (fs) => setDoc(doc(fs, "abstracts", "alice"), abstract({ status: "accepted" })));
   const fs = asUser(env, "alice");
   await assertFails(setDoc(doc(fs, "abstracts", "alice"), abstract({ status: "accepted", title: "Sneaky" })));
+  await assertFails(setDoc(doc(fs, "abstracts", "alice"), abstract({ status: "submitted", title: "Sneaky" })));
   await assertFails(deleteDoc(doc(fs, "abstracts", "alice")));
+});
+
+// Only `accepted` may be frozen. Freezing every non-submitted status would
+// trap a rejected participant with a document they can neither revise, delete,
+// nor replace — for the rest of the edition.
+test("an owner can revise and resubmit after a rejection", async () => {
+  await openSubmissions();
+  await seed(env, (fs) => setDoc(doc(fs, "abstracts", "alice"), abstract({ status: "rejected" })));
+  await assertSucceeds(setDoc(doc(asUser(env, "alice"), "abstracts", "alice"),
+    abstract({ status: "submitted", title: "Revised after review" })));
+});
+
+test("an owner can resubmit after an admin withdrawal", async () => {
+  await openSubmissions();
+  await seed(env, (fs) => setDoc(doc(fs, "abstracts", "alice"), abstract({ status: "withdrawn" })));
+  await assertSucceeds(setDoc(doc(asUser(env, "alice"), "abstracts", "alice"),
+    abstract({ status: "submitted", title: "Back again" })));
+});
+
+test("an owner can delete a rejected abstract to start over", async () => {
+  await openSubmissions();
+  await seed(env, (fs) => setDoc(doc(fs, "abstracts", "alice"), abstract({ status: "rejected" })));
+  await assertSucceeds(deleteDoc(doc(asUser(env, "alice"), "abstracts", "alice")));
 });
 
 test("an owner can withdraw while still submitted", async () => {
@@ -2545,13 +2595,16 @@ And these blocks above the catch-all:
       allow create: if isOwner(uid) && isVerified() && submissionWindowOpen()
         && validAbstract(request.resource.data, uid)
         && request.resource.data.status == 'submitted';
-      // Frozen on acceptance: otherwise an edit would leave abstracts_public
-      // stale, and a withdrawal would orphan the published copy.
+      // Frozen on acceptance ONLY: an edit after acceptance would leave
+      // abstracts_public stale and a withdrawal would orphan the published copy.
+      // Rejected and withdrawn abstracts must stay editable, or a rejected
+      // participant is stuck with a document they can neither revise, delete,
+      // nor replace (the doc id is their uid, so there is no second slot).
       allow update: if isOwner(uid) && isVerified() && submissionWindowOpen()
-        && resource.data.status == 'submitted'
+        && resource.data.status in ['submitted', 'rejected', 'withdrawn']
         && request.resource.data.status == 'submitted'
         && validAbstract(request.resource.data, uid);
-      allow delete: if isOwner(uid) && resource.data.status == 'submitted';
+      allow delete: if isOwner(uid) && resource.data.status != 'accepted';
       allow write: if isAdmin();
     }
 
@@ -2596,7 +2649,7 @@ git commit -m "feat: abstract security rules with a submission window and accept
 
 - [ ] **Step 1: Add the Firestore calls to `js/db.js`**
 
-Add these imports to the existing import list: `deleteDoc`, `setDoc`. Then append:
+Add `setDoc` to the existing Firestore import list (`deleteDoc` is already imported from Task 9 — re-adding it throws `SyntaxError: Identifier 'deleteDoc' has already been declared`). Then append:
 
 ```javascript
 export async function getSiteConfig() {
@@ -2773,12 +2826,17 @@ export async function mountAbstractForm(host, { user, verified }) {
     authorsEl.append(authorRow({ name: "", marks: "1", presenting: true }));
   }
 
-  const frozen = existing?.status && existing.status !== "submitted";
+  // Only an accepted abstract is locked, matching the rules: its public copy
+  // would otherwise go stale. Rejected and withdrawn stay editable so the
+  // participant can revise and resubmit before the deadline.
+  const frozen = existing?.status === "accepted";
   const editable = verified && windowOpen && !frozen;
 
   if (!verified) say("Verify your email address before submitting.", "warn");
-  else if (frozen) say(`This abstract is ${existing.status}. Contact the organizers to change it.`, "warn");
+  else if (frozen) say("This abstract has been accepted. Contact the organizers to change it.", "warn");
   else if (!windowOpen) say("Submissions are closed. You can still read your abstract.", "warn");
+  else if (existing?.status === "rejected") say("This abstract was not accepted. You can revise and resubmit it before the deadline.", "warn");
+  else if (existing?.status === "withdrawn") say("This abstract was withdrawn by the organizers. You can revise and resubmit it before the deadline.", "warn");
 
   for (const field of form.querySelectorAll("input, textarea, select, button")) {
     if (!editable) field.disabled = true;
@@ -4230,12 +4288,15 @@ Use a fresh email address. Every step must pass before release:
 4. Fill in name and affiliation, tick "show my name publicly", save. The name appears on `participants.html`.
 5. Untick and save. The name disappears from `participants.html`.
 6. Confirm the submitted abstract does **not** appear on `abstracts.html`.
-7. As an admin, accept it with a poster number. It appears on `abstracts.html` as `P<n>`.
-8. As the submitter, reload `account.html`. The form is now read-only and reports `accepted`.
-9. As an admin, "Withdraw from the public list". It disappears from `abstracts.html`.
-10. As an admin, add three schedule items across two days. `program.html` shows them grouped and ordered.
-11. As an admin, export both CSVs and open them in a spreadsheet.
-12. Sign out. `participants.html`, `abstracts.html`, and `program.html` all still render.
+7. As an admin, **reject** it with a reviewer note.
+8. As the submitter, reload `account.html`. The form is **still editable** and explains that the abstract can be revised. Change the title and resubmit — it must succeed. A `PERMISSION_DENIED` here means the freeze rule is over-broad and has trapped the participant.
+9. Confirm the reviewer note is nowhere in the page or in the network response — it lives in `abstract_reviews`, which the owner cannot read.
+10. As an admin, accept it with a poster number. It appears on `abstracts.html` as `P<n>`.
+11. As the submitter, reload `account.html`. The form is now read-only and reports `accepted`.
+12. As an admin, "Withdraw from the public list". It disappears from `abstracts.html`, and the submitter can edit it again.
+13. As an admin, add three schedule items across two days. `program.html` shows them grouped and ordered.
+14. As an admin, export both CSVs and open them in a spreadsheet.
+15. Sign out. `participants.html`, `abstracts.html`, and `program.html` all still render.
 
 - [ ] **Step 3: Run the deployment checks**
 
