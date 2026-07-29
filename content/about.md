@@ -2,9 +2,31 @@ PINTS — Paris Ile-de-France Neuroscience, Theory, and Systems — is an annual
 one-day meeting for the regional neuroscience community. It is deliberately
 informal: a keynote, a handful of contributed talks, and a large poster session.
 
+Paris hosts a large community of systems, cognitive and computational
+neuroscientists, but that community is spread across many institutions, and
+researchers with closely related interests often have little contact with one
+another. PINTS exists to close that gap — bringing the community together once a
+year to make collaborations possible, particularly between experimental and
+theoretical labs.
+
 ## Organizing committee
 
-To be completed by the organizers.
+_The committee below ran the 2025 edition — to be confirmed for 2026._
+
+- Alex Cayco-Gajic — Group for Neural Theory, ENS
+- Joao Barbosa — Institute for Neuromodulation, NeuroSpin and Sainte-Anne Hospital
+- Yves Boubenec — Laboratoire des systèmes perceptifs, ENS
+- Sophie Bagur — Brain Plasticity unit, ESPCI
+- Ludwig Hurza — Group for Neural Theory, ENS
+
+With the help of:
+
+- Mattia Della Vecchia — PhD student, Group for Neural Theory, ENS
+- Philipp Werthmann — Research Engineer, Neuromodulation Institute, Paris
+- Leonardo Agueci — Postdoc, Group for Neural Theory, ENS
+- Ella Callas — PhD student, Brain Plasticity unit, ESPCI
+- Nivea De Gusmao — Postdoc, Brain Plasticity unit, ESPCI
+- Alice Descamps — PhD student, Brain Plasticity unit, ESPCI
 
 ## Previous editions
 
@@ -13,6 +35,12 @@ To be completed by the organizers.
 ## Contact
 
 To be completed by the organizers.
+
+## Elsewhere in the Paris neuroscience community
+
+- [Neural Networking Night](https://neuralnetworkingnight.github.io/)
+- [Paris Neuro Calendar](https://www.neurocalendar.eu/)
+- [Paris Neuroscience Discord](http://tiny.cc/ParisNeuro)
 
 ## Editing this page
 

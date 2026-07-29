@@ -26,6 +26,10 @@ body {
 .prose { max-width: var(--measure); }
 .prose h1, .prose h2, .prose h3 { line-height: 1.25; margin: 2rem 0 .5rem; }
 .prose p, .prose ul, .prose ol { margin: 0 0 1rem; }
+/* Markdown cannot attach a class, so any image embedded in content/*.md needs a
+   global guard — without this a wide logo overflows .prose and makes the whole
+   page scroll sideways. */
+img { max-width: 100%; height: auto; }
 a { color: var(--accent); }
 
 /* Header and nav */

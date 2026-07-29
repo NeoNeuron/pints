@@ -17,4 +17,8 @@ Registration is free but required, so we can plan catering and poster boards.
 
 ## Sponsors
 
-We gratefully acknowledge the support of DIM C-Brains, QLife, and Aquineuro.
+We thank [majab.com](https://www.majab.com/) for designing our logo, and
+[DIM C-Brains](https://dim-cbrains.fr/fr/home), [QLife](https://psl.eu/q-life)
+and [Aquineuro](https://aquineuro.eu/) for their generous support.
+
+![DIM C-Brains, QLife and Aquineuro](assets/sponsors/sponsors-2025.png)
