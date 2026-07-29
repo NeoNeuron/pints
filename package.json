@@ -6,7 +6,7 @@
   "type": "module",
   "scripts": {
     "test": "node --test test/*.test.mjs",
-    "test:rules": "firebase emulators:exec --only firestore --project demo-pints-rules \"node --test test/rules/*.test.mjs\"",
+    "test:rules": "node scripts/rules-tests.mjs",
     "serve": "http-server -p 4173 -c-1 .",
     "vendor": "node scripts/vendor.mjs"
   },

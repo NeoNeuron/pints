@@ -1,0 +1,104 @@
+rules_version = '2';
+
+// The ONLY authorization boundary for this site. The client is a static page on
+// GitHub Pages with no server in front of it, so anything not forbidden here is
+// permitted to anyone on the internet holding the (public) Firebase config.
+//
+// Two constraints shape everything below:
+//
+//  1. Rules cannot filter fields. A read is all-or-nothing per document, so
+//     every "public but partial" view is a separate projection collection
+//     (participants_public, abstracts_public) rather than a field-level rule.
+//  2. Public list pages need `allow read: if true` — that is get AND list.
+//     A get-only rule denies the collection queries those pages issue.
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() { return request.auth != null; }
+
+    function isOwner(uid) { return isSignedIn() && request.auth.uid == uid; }
+
+    function isVerified() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isAdmin() {
+      return isSignedIn()
+        && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+
+    function str(value, maxLen) {
+      return value is string && value.size() > 0 && value.size() <= maxLen;
+    }
+
+    function optStr(data, field, maxLen) {
+      return !(field in data)
+        || (data[field] is string && data[field].size() <= maxLen);
+    }
+
+    function validProfile(data) {
+      return data.keys().hasOnly(['email', 'displayName', 'affiliation', 'showPublicly',
+                                  'edition', 'consentAt', 'createdAt', 'updatedAt'])
+        && data.keys().hasAll(['email', 'displayName', 'edition'])
+        && str(data.displayName, 80)
+        && optStr(data, 'affiliation', 120)
+        && data.edition is string
+        && (!('showPublicly' in data) || data.showPublicly is bool);
+    }
+
+    // Site configuration: submission window and current edition. Public read so
+    // every page can show the deadline; admin write only.
+    match /config/{docId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // Admin registry. A user may read their OWN document so the client knows
+    // whether to show admin UI; only admins may list or write. Membership of
+    // this collection is what isAdmin() tests, so write access is the keys to
+    // the kingdom — never widen it.
+    match /admins/{uid} {
+      allow get: if isOwner(uid) || isAdmin();
+      allow list: if isAdmin();
+      allow write: if isAdmin();
+    }
+
+    // Private participant profile. Never public — see participants_public.
+    match /users/{uid} {
+      allow get: if isOwner(uid) || isAdmin();
+      allow list: if isAdmin();
+      allow create: if isOwner(uid)
+        && validProfile(request.resource.data)
+        && request.resource.data.email == request.auth.token.email;
+      allow update: if isOwner(uid)
+        && validProfile(request.resource.data)
+        && request.resource.data.email == resource.data.email;
+      allow delete: if isOwner(uid);
+      allow write: if isAdmin();
+    }
+
+    // Public projection of a participant's name, written by the participant
+    // themselves: the existence of this document IS the consent record.
+    //
+    // Deliberately no get() on users/{uid}.showPublicly. A get() would read
+    // pre-batch state and so break the single writeBatch that flips consent and
+    // publishes in one go — and it buys no confidentiality, because a user can
+    // only ever publish their own name.
+    match /participants_public/{uid} {
+      allow read: if true;
+      allow create, update: if isOwner(uid)
+        && request.resource.data.keys().hasOnly(['displayName', 'affiliation',
+                                                 'edition', 'updatedAt'])
+        && str(request.resource.data.displayName, 80)
+        && optStr(request.resource.data, 'affiliation', 120)
+        && request.resource.data.edition is string;
+      allow delete: if isOwner(uid) || isAdmin();
+    }
+
+    // Anything not matched above is denied.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
