@@ -37,6 +37,27 @@ service cloud.firestore {
         || (data[field] is string && data[field].size() <= maxLen);
     }
 
+    // Reads config/site. If that document is missing the get() errors and the
+    // rule fails closed, which is the behaviour we want.
+    function submissionWindowOpen() {
+      let cfg = get(/databases/$(database)/documents/config/site).data;
+      return cfg.submissionsOpen == true && request.time < cfg.submissionDeadline;
+    }
+
+    function validAbstract(data, uid) {
+      return data.keys().hasOnly(['ownerUid', 'edition', 'title', 'affiliations', 'authors',
+                                  'body', 'type', 'status', 'createdAt', 'updatedAt'])
+        && data.keys().hasAll(['ownerUid', 'edition', 'title', 'affiliations', 'authors',
+                               'body', 'type', 'status'])
+        && data.ownerUid == uid
+        && data.edition is string
+        && str(data.title, 200)
+        && str(data.body, 2500)
+        && data.type in ['poster', 'talk']
+        && data.authors is list && data.authors.size() > 0 && data.authors.size() <= 20
+        && data.affiliations is list && data.affiliations.size() <= 10;
+    }
+
     function validProfile(data) {
       return data.keys().hasOnly(['email', 'displayName', 'affiliation', 'showPublicly',
                                   'edition', 'consentAt', 'createdAt', 'updatedAt'])
@@ -94,6 +115,44 @@ service cloud.firestore {
         && optStr(request.resource.data, 'affiliation', 120)
         && request.resource.data.edition is string;
       allow delete: if isOwner(uid) || isAdmin();
+    }
+
+    // One abstract per participant: the document id IS the owner's uid, so the
+    // owner reads it with a direct get() and needs no list permission at all.
+    match /abstracts/{uid} {
+      allow get: if isOwner(uid) || isAdmin();
+      allow list: if isAdmin();
+
+      allow create: if isOwner(uid) && isVerified() && submissionWindowOpen()
+        && validAbstract(request.resource.data, uid)
+        && request.resource.data.status == 'submitted';
+
+      // Frozen on acceptance ONLY. An edit after acceptance would leave
+      // abstracts_public stale and a withdrawal would orphan the published copy.
+      //
+      // Rejected and withdrawn MUST stay editable: the document id is the
+      // owner's uid, so a rejected participant with a frozen document could
+      // neither revise, delete, nor replace it — there is no second slot.
+      allow update: if isOwner(uid) && isVerified() && submissionWindowOpen()
+        && resource.data.status in ['submitted', 'rejected', 'withdrawn']
+        && request.resource.data.status == 'submitted'
+        && validAbstract(request.resource.data, uid);
+
+      allow delete: if isOwner(uid) && resource.data.status != 'accepted';
+
+      allow write: if isAdmin();
+    }
+
+    // Admin-only decisions. A separate document precisely because rules cannot
+    // hide a field from a document's owner.
+    match /abstract_reviews/{uid} {
+      allow read, write: if isAdmin();
+    }
+
+    // Public projection, written by the admin console on acceptance.
+    match /abstracts_public/{uid} {
+      allow read: if true;
+      allow write: if isAdmin();
     }
 
     // Anything not matched above is denied.
