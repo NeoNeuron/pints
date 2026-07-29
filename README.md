@@ -13,14 +13,17 @@ Systems). No build step: the repository contents *are* the deployed site.
 <https://neoneuron.github.io/pints/>. Every page and asset serves, markdown
 renders, the custom 404 works, and the browser console is clean.
 
-**Phase 1 (accounts) is built and deployed** — sign up, sign in, password reset,
-email verification, the account page with opt-in public listing, and the
-participant list. Its security rules are covered by 32 emulator tests. It is
-**dormant until the Firebase project is created**: see the Firebase section
-below. Until then the account pages say so plainly rather than erroring.
+**Phases 1 and 2 are built, deployed, and live.** Accounts (sign up, sign in,
+password reset, email verification, opt-in public listing, participant list) and
+abstracts (submission with live preview, edit, withdraw, admin review with
+private notes, poster numbering, public abstract list with search, CSV export).
+Security rules are covered by 52 emulator tests, and 45 unit tests cover the
+pure logic.
 
-Phases 2–3 — abstract submission and review, and the schedule editor — are
-specified in the plan but not yet built.
+**Phase 3 — the schedule editor and settings tab — is not built.** Its two admin
+tabs are stubs that point at the Firebase console. Until Phase 3 lands, opening
+and closing abstract submissions means editing `config/site` directly:
+set `submissionsOpen` (boolean) and `submissionDeadline` (timestamp).
 
 The site content is still placeholder: the edition dates, venue, keynote, and
 organizer contacts all need filling in via `content/*.md`.

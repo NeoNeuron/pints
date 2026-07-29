@@ -2088,6 +2088,32 @@ git commit -m "feat: public participant list sorted by surname"
 
 Satisfies requirements 2 and 5, and lands the CSV export that stands in for requirement 7.
 
+> **Status: built, deployed, live.** All Phase 2 code is written and pushed, and `firestore.rules`
+> has been deployed to the `pints-conference` project. 52 rules tests and 45 unit tests pass.
+>
+> **Verified:** the public abstracts page reads production Firestore and renders its empty state;
+> `admin.html` redirects a signed-out visitor rather than leaking or hanging; production rules deny
+> anonymous reads of `users` and `admins` while allowing `participants_public`.
+>
+> **Not verified — needs a human:** the signed-in walk (submit → admin accept → appears publicly →
+> owner frozen → withdraw). Creating an account means entering credentials, which the assistant does
+> not do. The E2E checklist in Task 21 covers it.
+>
+> **Blocking note:** `config/site.submissionsOpen` is currently `false`, so the submission form
+> correctly reports "Submissions are closed". Flip it in the Firebase console to exercise
+> submission; the Phase 3 settings tab replaces that manual step.
+>
+> **Deviations from this plan, all deliberate:**
+>
+> 1. **Admin action buttons share a `guarded()` helper** that disables the button, awaits the write,
+>    re-renders, and re-enables on failure — rather than each handler repeating try/catch.
+> 2. **Reviewer notes load asynchronously per card** after render, so one failed `getReview` cannot
+>    block the whole list.
+> 3. **`js/admin-schedule.js` and `js/admin-settings.js` ship as stubs** that name the Firebase
+>    console workaround, so every tab is clickable before Phase 3.
+> 4. **All Firebase-backed Phase 2 pages call `warnIfUnconfigured()` first**, following the Phase 1
+>    pattern.
+
 ### Task 11: Abstract domain logic
 
 **Files:**
