@@ -58,6 +58,16 @@ service cloud.firestore {
         && data.affiliations is list && data.affiliations.size() <= 10;
     }
 
+    function validScheduleItem(data) {
+      return data.keys().hasOnly(['edition', 'day', 'start', 'end', 'title', 'speaker',
+                                  'affiliation', 'kind', 'location', 'abstractUid', 'order'])
+        && data.keys().hasAll(['edition', 'day', 'title', 'kind'])
+        && data.edition is string
+        && data.day is string
+        && str(data.title, 200)
+        && data.kind in ['keynote', 'talk', 'poster', 'break', 'lunch', 'social', 'other'];
+    }
+
     function validProfile(data) {
       return data.keys().hasOnly(['email', 'displayName', 'affiliation', 'showPublicly',
                                   'edition', 'consentAt', 'createdAt', 'updatedAt'])
@@ -153,6 +163,13 @@ service cloud.firestore {
     match /abstracts_public/{uid} {
       allow read: if true;
       allow write: if isAdmin();
+    }
+
+    // The program. World-readable so the page works signed out.
+    match /schedule/{itemId} {
+      allow read: if true;
+      allow create, update: if isAdmin() && validScheduleItem(request.resource.data);
+      allow delete: if isAdmin();
     }
 
     // Anything not matched above is denied.

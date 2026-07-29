@@ -1,4 +1,5 @@
 import {
+  addDoc,
   collection,
   deleteDoc,
   doc,
@@ -152,3 +153,32 @@ export async function listUsers() {
   const q = query(collection(db, "users"), where("edition", "==", CURRENT_EDITION));
   return (await getDocs(q)).docs.map(snapData);
 }
+
+// ----------------------------------------------------------------- schedule
+
+export async function listSchedule() {
+  const q = query(collection(db, "schedule"), where("edition", "==", CURRENT_EDITION));
+  return (await getDocs(q)).docs.map(snapData);
+}
+
+/** `id` null creates; otherwise replaces. Resolves to the document id. */
+export async function saveScheduleItem(id, data) {
+  const payload = { ...data, edition: CURRENT_EDITION };
+  if (id) {
+    await setDoc(doc(db, "schedule", id), payload);
+    return id;
+  }
+  const ref = await addDoc(collection(db, "schedule"), payload);
+  return ref.id;
+}
+
+export const deleteScheduleItem = (id) => deleteDoc(doc(db, "schedule", id));
+
+// ----------------------------------------------------------------- settings
+
+export const saveSiteConfig = ({ submissionsOpen, submissionDeadline }) =>
+  setDoc(doc(db, "config", "site"),
+    { submissionsOpen, submissionDeadline, edition: CURRENT_EDITION }, { merge: true });
+
+export const addAdmin = (uid, email, addedBy) =>
+  setDoc(doc(db, "admins", uid), { email, addedBy, addedAt: serverTimestamp() });

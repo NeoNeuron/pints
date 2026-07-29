@@ -1,6 +1,94 @@
-// Replaced in Phase 3.
-export async function mountSettingsTab(host) {
-  host.innerHTML = `<p class="msg warn">The settings editor lands in Phase 3. Until then,
-    open or close submissions by editing <code>config/site</code> in the Firebase console:
-    set <code>submissionsOpen</code> and <code>submissionDeadline</code>.</p>`;
+import { addAdmin, getSiteConfig, saveSiteConfig } from "./db.js";
+
+export async function mountSettingsTab(host, { adminUid }) {
+  host.innerHTML = `
+    <div id="cfg-msg" class="msg" role="status" aria-live="polite"></div>
+
+    <h2>Submission window</h2>
+    <form id="cfg-form" novalidate>
+      <div class="checkline">
+        <input id="cfg-open" type="checkbox">
+        <label for="cfg-open">Submissions are open</label>
+      </div>
+      <label for="cfg-deadline">Deadline
+        <span class="hint">Enforced by the security rules as well as the form, so submissions
+          close on time even if the checkbox above is forgotten.</span>
+      </label>
+      <input id="cfg-deadline" type="datetime-local">
+      <div class="actions"><button type="submit" id="cfg-save">Save settings</button></div>
+    </form>
+
+    <h2>Add an organizer</h2>
+    <p class="muted">Find the person's UID under <strong>Authentication → Users</strong> in the
+      Firebase console. They must already have an account on this site.</p>
+    <form id="adm-form" novalidate>
+      <label for="adm-uid">User UID</label>
+      <input id="adm-uid" type="text" required autocomplete="off">
+      <label for="adm-email">Their email (for the record)</label>
+      <input id="adm-email" type="email" required autocomplete="off">
+      <div class="actions"><button type="submit" id="adm-save">Grant admin rights</button></div>
+    </form>`;
+
+  const msg = host.querySelector("#cfg-msg");
+  const openEl = host.querySelector("#cfg-open");
+  const deadlineEl = host.querySelector("#cfg-deadline");
+  const cfgSave = host.querySelector("#cfg-save");
+  const admSave = host.querySelector("#adm-save");
+
+  const say = (text, kind = "ok") => {
+    msg.className = `msg ${kind}`;
+    msg.textContent = text;
+  };
+
+  try {
+    const config = await getSiteConfig();
+    openEl.checked = Boolean(config?.submissionsOpen);
+    const deadline = config?.submissionDeadline?.toDate?.();
+    if (deadline) {
+      // datetime-local wants local wall-clock time, not UTC.
+      const offset = deadline.getTimezoneOffset() * 60000;
+      deadlineEl.value = new Date(deadline.getTime() - offset).toISOString().slice(0, 16);
+    }
+  } catch (err) {
+    say("Could not load the current settings.", "err");
+    console.error("[pints] getSiteConfig", err);
+  }
+
+  host.querySelector("#cfg-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    if (!deadlineEl.value) return say("Set a deadline before saving.", "err");
+    cfgSave.disabled = true;
+    try {
+      await saveSiteConfig({
+        submissionsOpen: openEl.checked,
+        submissionDeadline: new Date(deadlineEl.value),
+      });
+      say(openEl.checked
+        ? "Saved. Submissions are open."
+        : "Saved. Submissions are closed.", "ok");
+    } catch (err) {
+      say("Could not save settings.", "err");
+      console.error("[pints] saveSiteConfig", err);
+    } finally {
+      cfgSave.disabled = false;
+    }
+  });
+
+  host.querySelector("#adm-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const uid = host.querySelector("#adm-uid").value.trim();
+    const email = host.querySelector("#adm-email").value.trim();
+    if (!uid || !email) return say("Both the UID and the email are required.", "err");
+    admSave.disabled = true;
+    try {
+      await addAdmin(uid, email, adminUid);
+      say(`${email} is now an organizer.`, "ok");
+      e.target.reset();
+    } catch (err) {
+      say("Could not grant admin rights. Check the UID is correct.", "err");
+      console.error("[pints] addAdmin", err);
+    } finally {
+      admSave.disabled = false;
+    }
+  });
 }
