@@ -2113,6 +2113,13 @@ Satisfies requirements 2 and 5, and lands the CSV export that stands in for requ
 >    console workaround, so every tab is clickable before Phase 3.
 > 4. **All Firebase-backed Phase 2 pages call `warnIfUnconfigured()` first**, following the Phase 1
 >    pattern.
+>
+> **Known looseness, accepted:** `nextPosterNumber()` only *suggests* the next free board number, and
+> nothing enforces uniqueness. One admin accepting abstracts one at a time is safe, because the list
+> re-renders after each publish and the suggestion advances. Two admins reviewing simultaneously —
+> or one admin in two tabs — can both be shown `3` and both publish `3`. For a one-day meeting with a
+> single organizer doing the review this is not worth a transaction; if review is ever shared, make
+> `publishAbstract` a `runTransaction` that re-reads the max board number.
 
 ### Task 11: Abstract domain logic
 
@@ -4347,6 +4354,10 @@ Expected: PASS on both. Do not proceed on a failure — fix it first.
 
 Use a fresh email address. Every step must pass before release:
 
+0. **In the Firebase console, open the submission window** — set
+   `config/site.submissionsOpen` to `true` and `submissionDeadline` to a future date. Without this
+   the form correctly reports "Submissions are closed" and the walk stalls at step 3, which reads
+   like a bug and is not one. (The Phase 3 settings tab replaces this manual step.)
 1. Sign up. A verification email arrives.
 2. **Before verifying**, open `account.html` — the abstract form is disabled with the "verify your email" warning.
 3. Click the verification link, return to the tab, reload once, and **submit an abstract in the same session.** It must succeed. A `PERMISSION_DENIED` here means the `refreshVerification()` call in `js/page-account.js` is missing or ran too late.

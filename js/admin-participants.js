@@ -9,6 +9,10 @@ const COLUMNS = [
   { key: "showPublicly", label: "Listed publicly" },
 ];
 
+/** Match the on-screen table: organizers open this file and read it directly. */
+const forExport = (list) =>
+  list.map((user) => ({ ...user, showPublicly: user.showPublicly ? "yes" : "no" }));
+
 function download(filename, text) {
   const url = URL.createObjectURL(new Blob([text], { type: "text/csv;charset=utf-8" }));
   const link = document.createElement("a");
@@ -53,9 +57,9 @@ export async function mountParticipantsTab(host) {
     }
 
     host.querySelector("#p-export-all").addEventListener("click", () =>
-      download("pints-registrations.csv", toCsv(users, COLUMNS)));
+      download("pints-registrations.csv", toCsv(forExport(users), COLUMNS)));
     host.querySelector("#p-export-consented").addEventListener("click", () =>
-      download("pints-mailing-list.csv", toCsv(consented, COLUMNS)));
+      download("pints-mailing-list.csv", toCsv(forExport(consented), COLUMNS)));
 
     if (!users.length) {
       msg.className = "msg warn";
