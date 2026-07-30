@@ -11,11 +11,11 @@ theoretical labs.
 
 ## Organizing committee
 
-- Joao Barbosa — Institute for Neuromodulation, NeuroSpin and Sainte-Anne Hospital
-- Sophie Bagur — Brain Plasticity unit, ESPCI
-- Yves Boubenec — Laboratoire des systèmes perceptifs, ENS
-- Alex Cayco-Gajic — Group for Neural Theory, ENS
-- Ludwig Hurza — Group for Neural Theory, ENS
+- [Joao Barbosa](http://jbarbosa.org/) — Institute for Neuromodulation, NeuroSpin and Sainte-Anne Hospital
+- [Sophie Bagur](https://scholar.google.com/citations?user=dHlO9UcAAAAJ&hl=en) — Brain Plasticity unit, ESPCI
+- [Yves Boubenec](https://sites.google.com/view/yves-boubenec/home) — Laboratoire des systèmes perceptifs, ENS
+- [Alex Cayco-Gajic](https://caycogajiclab.github.io/) — Group for Neural Theory, ENS
+- [Ludwig Hruza](https://lnc2.dec.ens.fr/en/member/112324/ludwig-hruza) — Group for Neural Theory, ENS
 
 ## Previous editions
 

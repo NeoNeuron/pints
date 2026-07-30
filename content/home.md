@@ -7,19 +7,19 @@ shortly.
 
 ## Keynote
 
-**Devika Narain**
+**[Devika Narain](https://www.narainlab.org/)**
 
 ## Invited speakers
 
 | Session | Speaker |
 |---|---|
-| Cognitive neuroscience | **Stanislas Dehaene** |
-| Systems neuroscience | **Claire Wyart** |
-| Computational neuroscience | **Remi Monasson** |
+| Cognitive neuroscience | **[Stanislas Dehaene](https://en.wikipedia.org/wiki/Stanislas_Dehaene)** |
+| Systems neuroscience | **[Claire Wyart](https://en.wikipedia.org/wiki/Claire_Wyart)** |
+| Computational neuroscience | **[Rémi Monasson](https://www.phys.ens.fr/~monasson/)** |
 
 ## PINTS without borders
 
-**Antoine Balzeau**
+**[Antoine Balzeau](https://antoinebalzeau.jimdofree.com/)**
 
 ## Registration
 
