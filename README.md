@@ -4,6 +4,9 @@ Static site for the PINTS meeting (Paris Ile-de-France Neuroscience, Theory, and
 Systems). No build step: the repository contents *are* the deployed site.
 
 - **Live site:** <https://neoneuron.github.io/pints/>
+- **Design notes and lessons:** [`docs/design-notes.md`](docs/design-notes.md) —
+  start here if you are picking this up. Why the architecture is what it is, and
+  the traps that cost time the first time round.
 - **Design spec:** `docs/superpowers/specs/2026-07-29-pints-website-design.md`
 - **Implementation plan:** `docs/superpowers/plans/2026-07-29-pints-website.md`
 
