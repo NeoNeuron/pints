@@ -1,10 +1,14 @@
 // Public Firebase web config. NOT a secret: it identifies the project, it does
 // not grant access. Authorization is enforced entirely by firestore.rules.
 //
-// TO FILL IN: Firebase console -> Project settings -> General -> Your apps ->
-// Web app, then copy the firebaseConfig object over the placeholders below.
-// See README.md for the full setup checklist, including the authorized-domains
-// step that sign-in fails without.
+// GitHub's secret scanner flags apiKey as a "Google API Key". Do not try to hide
+// it: the browser must receive it to reach Firebase, so it is public in the
+// served JavaScript wherever it is stored, and moving it into a build-time
+// secret would add a build step for no security gain.
+//
+// The exposure worth mitigating is quota abuse, not data access — see the
+// "web API key" section of README.md for the two free fixes (HTTP referrer
+// restrictions on the key, and App Check).
 
 export const firebaseConfig = {
   apiKey: "AIzaSyC1ew1Nzgog929MIcMAPzatWTHJqiR0M9Q",

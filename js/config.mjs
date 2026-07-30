@@ -11,7 +11,7 @@ export const NAV = [
   { href: "abstracts.html", label: "Abstracts" },
   { href: "participants.html", label: "Participants" },
   { href: "venue.html", label: "Venue" },
-  { href: "previous.html", label: "Previous editions" },
+  { href: "previous.html", label: "Archive" },
   { href: "about.html", label: "About" },
 ];
 

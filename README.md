@@ -124,6 +124,42 @@ rules are tested — but until the steps below are done, every account page show
 page with no server in front of it, so anything the rules do not forbid is
 permitted to anyone on the internet. Change it only alongside its tests.
 
+### The web API key in `js/firebase-config.js` is public on purpose
+
+GitHub's secret scanner flags it as a "Google API Key". It is not a credential,
+and it must not be hidden:
+
+- **It cannot be hidden.** The browser has to receive it to reach Firebase, so it
+  ends up in the served JavaScript and the Network tab no matter where it is
+  stored. Injecting it from a GitHub Actions secret changes where it lives, not
+  whether it is public — and it would force a build step this project
+  deliberately does not have.
+- **It does not grant access.** It identifies the project. Authorization is
+  `firestore.rules`, covered by 58 emulator tests and verified against
+  production: an anonymous caller holding this exact key gets
+  `PERMISSION_DENIED` on `users`, `admins`, `abstracts`, and `abstract_reviews`,
+  and can read only what is public by design.
+
+**What the exposure does cost you is quota, not data.** An unrestricted key lets
+anyone drive Identity Toolkit and Firestore calls against this project — mass
+signup attempts, password-reset floods, read loops. On Spark that means hitting a
+daily cap and denying service to real participants.
+
+Two free mitigations, neither yet applied (checked 2026-07-30: the key answers
+`curl` with no `Referer` at all, so it currently has no restrictions):
+
+1. **Restrict the key** — Google Cloud console → *APIs & Services →
+   Credentials* → the browser key. Set *Application restrictions* to **HTTP
+   referrers** and allow `neoneuron.github.io/*` (plus `localhost` for local
+   work). Under *API restrictions*, limit it to the APIs actually used:
+   Identity Toolkit, Cloud Firestore, Token Service. Test sign-in afterwards —
+   an over-tight list breaks auth.
+2. **Enable App Check** with reCAPTCHA v3 (free) and enforce it on Firestore, so
+   requests must come from your real site rather than a script holding the key.
+
+If the scanning alert is noisy, dismiss it as a false positive rather than
+rotating the key — rotation changes the string without changing what it can do.
+
 ### One-time setup
 
 1. <https://console.firebase.google.com> → **Add project**, name it
