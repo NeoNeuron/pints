@@ -5,7 +5,7 @@
 
 ## Context
 
-PINTS (Paris Ile-de-France Neuroscience, Theory, and Systems) runs on
+PINTS (Paris Île-de-France Neuroscience, Theory, and Systems) runs on
 `pints2025.sciencesconf.org`, a hosted platform the organizers don't control. Schedules are posted
 as spreadsheet screenshots, there is no abstract submission flow, and every content change goes
 through sciencesconf's UI.

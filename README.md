@@ -1,6 +1,6 @@
 # PINTS conference website
 
-Static site for the PINTS meeting (Paris Ile-de-France Neuroscience, Theory, and
+Static site for the PINTS meeting (Paris Île-de-France Neuroscience, Theory, and
 Systems). No build step: the repository contents *are* the deployed site.
 
 - **Live site:** <https://neoneuron.github.io/pints/>

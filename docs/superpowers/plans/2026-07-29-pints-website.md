@@ -94,7 +94,7 @@ touch .nojekyll
   "name": "pints-website",
   "version": "1.0.0",
   "private": true,
-  "description": "Website for the PINTS conference (Paris Ile-de-France Neuroscience, Theory, and Systems)",
+  "description": "Website for the PINTS conference (Paris Île-de-France Neuroscience, Theory, and Systems)",
   "type": "module",
   "scripts": {
     "test": "node --test test/*.test.mjs",
@@ -174,7 +174,7 @@ Expected: FAIL — `Cannot find module '.../js/nav-utils.mjs'`
 
 export const CURRENT_EDITION = "pints2026";
 export const SITE_NAME = "PINTS";
-export const SITE_TAGLINE = "Paris Ile-de-France Neuroscience, Theory, and Systems";
+export const SITE_TAGLINE = "Paris Île-de-France Neuroscience, Theory, and Systems";
 
 export const NAV = [
   { href: "index.html", label: "Home" },
@@ -675,8 +675,8 @@ for (const host of document.querySelectorAll("[data-markdown]")) {
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>PINTS — Paris Ile-de-France Neuroscience, Theory, and Systems</title>
-<meta name="description" content="PINTS is a one-day meeting bringing together the Paris Ile-de-France neuroscience, theory, and systems community.">
+<title>PINTS — Paris Île-de-France Neuroscience, Theory, and Systems</title>
+<meta name="description" content="PINTS is a one-day meeting bringing together the Paris Île-de-France neuroscience, theory, and systems community.">
 <link rel="stylesheet" href="css/styles.css">
 </head>
 <body>
@@ -684,7 +684,7 @@ for (const host of document.querySelectorAll("[data-markdown]")) {
 <section class="hero">
   <div class="wrap">
     <h1>PINTS 2026</h1>
-    <p class="meta">Paris Ile-de-France Neuroscience, Theory, and Systems<br>
+    <p class="meta">Paris Île-de-France Neuroscience, Theory, and Systems<br>
       <strong>Date to be confirmed</strong> · Paris</p>
     <p class="actions"><a class="button" href="login.html">Register / sign in</a>
       <a class="button secondary" href="program.html">See the program</a></p>
@@ -764,7 +764,7 @@ Titles and headings: Program/Program, Abstracts/Abstracts, Participants/Register
 
 ```markdown
 PINTS is a one-day meeting that brings together the neuroscience, theory, and
-systems community across Paris and the Ile-de-France region. Talks and posters
+systems community across Paris and the Île-de-France region. Talks and posters
 span experimental, computational, and theoretical work.
 
 ## Keynote
@@ -790,7 +790,7 @@ We gratefully acknowledge the support of DIM C-Brains, QLife, and Aquineuro.
 `content/about.md`:
 
 ```markdown
-PINTS — Paris Ile-de-France Neuroscience, Theory, and Systems — is an annual
+PINTS — Paris Île-de-France Neuroscience, Theory, and Systems — is an annual
 one-day meeting for the regional neuroscience community. It is deliberately
 informal: a keynote, a handful of contributed talks, and a large poster session.
 
@@ -864,7 +864,7 @@ git commit -m "feat: static pages rendered from organizer-editable markdown"
 ````markdown
 # PINTS conference website
 
-Static site for the PINTS meeting (Paris Ile-de-France Neuroscience, Theory, and
+Static site for the PINTS meeting (Paris Île-de-France Neuroscience, Theory, and
 Systems). No build step: the repository contents *are* the deployed site.
 
 - **Live site:** _fill in after enabling Pages_

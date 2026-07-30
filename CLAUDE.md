@@ -1,4 +1,4 @@
-# Paris Ile-de-France Neuroscience, Theory, and Systems (PINTS)
+# Paris Île-de-France Neuroscience, Theory, and Systems (PINTS)
 
 The new website for PINTS conference.
 

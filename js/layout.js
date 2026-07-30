@@ -17,13 +17,14 @@ export function mountLayout() {
     const wrap = document.createElement("div");
     wrap.className = "wrap";
 
+    // Name only, no tagline. With seven nav items plus up to two auth links, the
+    // tagline pushed the whole nav onto a second row for signed-in users. The
+    // full name still appears in every <title>, the home hero, and the footer.
     const brand = document.createElement("a");
     brand.className = "brand";
     brand.href = "index.html";
     brand.textContent = SITE_NAME;
-    const tagline = document.createElement("small");
-    tagline.textContent = SITE_TAGLINE;
-    brand.append(tagline);
+    brand.title = SITE_TAGLINE;
 
     const nav = document.createElement("nav");
     nav.className = "site-nav";

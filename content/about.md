@@ -1,4 +1,4 @@
-PINTS — Paris Ile-de-France Neuroscience, Theory, and Systems — is an annual
+PINTS — Paris Île-de-France Neuroscience, Theory, and Systems — is an annual
 one-day meeting for the regional neuroscience community. It is deliberately
 informal: a keynote, a handful of contributed talks, and a large poster session.
 
@@ -11,22 +11,11 @@ theoretical labs.
 
 ## Organizing committee
 
-_The committee below ran the 2025 edition — to be confirmed for 2026._
-
-- Alex Cayco-Gajic — Group for Neural Theory, ENS
 - Joao Barbosa — Institute for Neuromodulation, NeuroSpin and Sainte-Anne Hospital
-- Yves Boubenec — Laboratoire des systèmes perceptifs, ENS
 - Sophie Bagur — Brain Plasticity unit, ESPCI
+- Yves Boubenec — Laboratoire des systèmes perceptifs, ENS
+- Alex Cayco-Gajic — Group for Neural Theory, ENS
 - Ludwig Hurza — Group for Neural Theory, ENS
-
-With the help of:
-
-- Mattia Della Vecchia — PhD student, Group for Neural Theory, ENS
-- Philipp Werthmann — Research Engineer, Neuromodulation Institute, Paris
-- Leonardo Agueci — Postdoc, Group for Neural Theory, ENS
-- Ella Callas — PhD student, Brain Plasticity unit, ESPCI
-- Nivea De Gusmao — Postdoc, Brain Plasticity unit, ESPCI
-- Alice Descamps — PhD student, Brain Plasticity unit, ESPCI
 
 ## Previous editions
 

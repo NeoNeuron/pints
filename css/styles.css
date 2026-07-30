@@ -34,11 +34,12 @@ a { color: var(--accent); }
 
 /* Header and nav */
 .site-header { border-bottom: 1px solid var(--line); background: var(--bg-soft); }
-.site-header .wrap { display: flex; flex-wrap: wrap; align-items: baseline; gap: .5rem 1.5rem; padding-block: 1rem; }
-.brand { font-weight: 700; font-size: 1.35rem; color: var(--ink); text-decoration: none; letter-spacing: .02em; }
-.brand small { display: block; font-weight: 400; font-size: .78rem; color: var(--muted); letter-spacing: 0; }
-.site-nav { display: flex; flex-wrap: wrap; gap: .25rem 1rem; margin-left: auto; }
-.site-nav a { color: var(--muted); text-decoration: none; padding: .25rem 0; border-bottom: 2px solid transparent; }
+.site-header .wrap { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem 1.5rem; padding-block: .85rem; }
+.brand { font-weight: 700; font-size: 1.35rem; color: var(--ink); text-decoration: none; letter-spacing: .02em; white-space: nowrap; }
+.site-nav { display: flex; flex-wrap: wrap; gap: .25rem 1.05rem; margin-left: auto; }
+/* nowrap so a two-word label like "My account" can never break mid-label and
+   drag the row height with it. */
+.site-nav a { color: var(--muted); text-decoration: none; padding: .25rem 0; border-bottom: 2px solid transparent; white-space: nowrap; }
 .site-nav a:hover { color: var(--ink); }
 .site-nav a[aria-current="page"] { color: var(--ink); border-bottom-color: var(--accent); }
 .site-nav a.auth-link { color: var(--accent); font-weight: 600; }

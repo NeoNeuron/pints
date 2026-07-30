@@ -3,7 +3,7 @@
 
 export const CURRENT_EDITION = "pints2026";
 export const SITE_NAME = "PINTS";
-export const SITE_TAGLINE = "Paris Ile-de-France Neuroscience, Theory, and Systems";
+export const SITE_TAGLINE = "Paris Île-de-France Neuroscience, Theory, and Systems";
 
 export const NAV = [
   { href: "index.html", label: "Home" },
