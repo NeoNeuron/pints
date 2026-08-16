@@ -20,26 +20,33 @@ renders, the custom 404 works, and the browser console is clean.
 `CLAUDE.md` is implemented except the bonus mailing-list *sending*, which needs a
 paid Firebase plan; the CSV export stands in for it.
 
-- **Accounts** — sign up, sign in, password reset, email verification, opt-in
-  public listing, participant list.
-- **Abstracts** — submission with live preview, edit, withdraw; admin review with
-  private notes, poster numbering, accept/reject/unpublish; public list with search.
-- **Schedule** — admin editor grouped by day; public program page.
-- **Settings** — open/close the submission window, set the deadline, grant admin
-  rights. No Firebase-console workarounds remain for day-to-day organizing.
+- **Accounts** — sign up, sign in, password reset, email verification. Registering
+  puts you on the public participant list; there is no separate opt-in.
+- **Abstracts** — as many submissions per person as you like, each with a topic
+  (cognitive / systems / computational), an optional figure, a live preview, and
+  an opt-out from being considered for a talk. Admin review with private notes,
+  poster-vs-talk assignment, poster numbering, accept/reject/unpublish. Public
+  list with search and a topic filter.
+- **Pages** — organizers edit page copy in the admin console; `content/*.md`
+  remains the fallback. See "Editing page content".
+- **Schedule** — admin editor for a single-day program, ordered by start time;
+  public program page headed by the meeting date from Settings.
+- **Settings** — set the meeting date, open/close the submission window, set the
+  deadline, grant admin rights. No Firebase-console workarounds remain for
+  day-to-day organizing.
 
-58 security-rules tests and 56 unit tests cover this.
+71 security-rules tests and 67 unit tests cover this.
 
 ### Deploying rules — order matters
 
-**`firestore.rules` must be deployed *before or with* the code that depends on
-it.** Pushing a page that reads a new collection while the old ruleset is live
-gives users "Missing or insufficient permissions" even though the emulator tests
-pass. After changing rules:
+**`firestore.rules` and `storage.rules` must be deployed *before or with* the
+code that depends on them.** Pushing a page that reads a new collection while the
+old ruleset is live gives users "Missing or insufficient permissions" even though
+the emulator tests pass. After changing rules:
 
 ```bash
 npm run test:rules
-npx firebase deploy --only firestore:rules
+npx firebase deploy --only firestore:rules,storage
 ```
 
 The site content is still placeholder: the edition dates, venue, keynote, and
@@ -47,15 +54,30 @@ organizer contacts all need filling in via `content/*.md`.
 
 ## Editing page content
 
-Page copy lives in `content/*.md`. Edit the file on GitHub, commit, and the
-change is live within a minute. No other step.
+**The easy way: sign in as an organizer, open `admin.html` → Pages, pick a page,
+edit the markdown, and press "Save and publish".** The change is live on reload.
+No GitHub account, no commit.
 
-| File | Appears on |
-|---|---|
-| `content/home.md` | `index.html` |
-| `content/about.md` | `about.html` |
-| `content/venue.md` | `venue.html` |
-| `content/poster-guidelines.md` | `abstracts.html` (from Phase 2) |
+Edits are stored in Firestore under `pages/{slug}`. The `content/*.md` files
+stay in the repository as the seed and the fallback: a page nobody has edited on
+the site is served from its file, and so is a page whose Firestore read fails.
+"Revert to the version in the repo" deletes the Firestore document, which puts
+the committed file back in charge.
+
+Editing the `.md` file on GitHub still works, but **it has no effect on a page
+that has been edited through the admin console** — the Firestore copy wins. If
+you have been editing on the site, edit on the site.
+
+| File | Slug | Appears on |
+|---|---|---|
+| `content/home.md` | `home` | `index.html` |
+| `content/about.md` | `about` | `about.html` |
+| `content/venue.md` | `venue` | `venue.html` |
+| `content/previous-editions.md` | `previous-editions` | `previous.html` |
+| `content/poster-guidelines.md` | `poster-guidelines` | `abstracts.html` |
+
+The list of editable pages is `PAGES` in `js/config.mjs`; adding a page means
+adding an entry there and a `data-page` attribute on the host element.
 
 Markdown supports headings, lists, links, tables, bold, and italic. It is
 sanitized before rendering, so raw HTML and scripts are stripped.
@@ -166,9 +188,12 @@ rotating the key — rotation changes the string without changing what it can do
 ### One-time setup
 
 1. <https://console.firebase.google.com> → **Add project**, name it
-   `pints-conference`. Analytics off. **Stay on the Spark (free) plan — do not
-   enable Cloud Storage or Cloud Functions.** Both require Blaze and a credit
-   card, and nothing here needs them.
+   `pints-conference`. Analytics off. **The project must be on the Blaze
+   (pay-as-you-go) plan**, because abstract figures are stored in Cloud Storage
+   and Storage is not available on Spark. Everything else here stays inside the
+   free allowance; set a budget alert of a few euros so a surprise is impossible.
+   **Do not enable Cloud Functions** — nothing in this site needs them, and they
+   would break the "no server" property the whole design rests on.
 2. **Build → Firestore Database → Create database → Production mode**, location
    `eur3 (europe-west)`.
 3. **Build → Authentication → Get started → Sign-in method → Email/Password →
@@ -180,12 +205,15 @@ rotating the key — rotation changes the string without changing what it can do
    copy the `firebaseConfig` object, and paste it over the placeholders in
    `js/firebase-config.js`. That file is public by design — the web API key
    identifies the project, it is not a credential.
-6. Deploy the rules: `npx firebase login && npx firebase use --add` (pick the
-   project), then `npx firebase deploy --only firestore:rules`.
-7. In Firestore, create collection `config`, document ID `site`, with fields
-   `submissionsOpen` (boolean), `submissionDeadline` (timestamp), and `edition`
-   (string, `pints2026`). Phase 2's rules call `get()` on this document; if it
-   is missing, the rule errors and denies every submission.
+6. **Build → Storage → Get started.** This is the step that needs Blaze. Accept
+   the default bucket; `storage.rules` locks it down to `abstract_figures/{uid}/`.
+7. Deploy the rules: `npx firebase login && npx firebase use --add` (pick the
+   project), then `npx firebase deploy --only firestore:rules,storage`.
+8. In Firestore, create collection `config`, document ID `site`, with fields
+   `submissionsOpen` (boolean), `submissionDeadline` (timestamp), `eventDate`
+   (string, `YYYY-MM-DD`), and `edition` (string, `pints2026`). The abstract
+   rules call `get()` on this document; if it is missing, the rule errors and
+   denies every submission.
 
 ### Verification emails and institutional mail filters
 

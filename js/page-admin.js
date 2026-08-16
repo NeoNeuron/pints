@@ -26,6 +26,7 @@ if (!warnIfUnconfigured(guard)) {
     const loaders = {
       abstracts: () => import("./admin-abstracts.js").then((m) => m.mountAbstractsTab),
       schedule: () => import("./admin-schedule.js").then((m) => m.mountScheduleTab),
+      pages: () => import("./admin-pages.js").then((m) => m.mountPagesTab),
       participants: () => import("./admin-participants.js").then((m) => m.mountParticipantsTab),
       settings: () => import("./admin-settings.js").then((m) => m.mountSettingsTab),
     };

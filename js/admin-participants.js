@@ -2,16 +2,13 @@ import { listUsers } from "./db.js";
 import { sortParticipants } from "./participant-utils.mjs";
 import { toCsv } from "./csv-utils.mjs";
 
+// Everyone who registers is on the public list, so there is no consent column
+// to export and no separate "consented only" mailing list any more.
 const COLUMNS = [
   { key: "displayName", label: "Name" },
   { key: "affiliation", label: "Affiliation" },
   { key: "email", label: "Email" },
-  { key: "showPublicly", label: "Listed publicly" },
 ];
-
-/** Match the on-screen table: organizers open this file and read it directly. */
-const forExport = (list) =>
-  list.map((user) => ({ ...user, showPublicly: user.showPublicly ? "yes" : "no" }));
 
 function download(filename, text) {
   const url = URL.createObjectURL(new Blob([text], { type: "text/csv;charset=utf-8" }));
@@ -27,12 +24,11 @@ export async function mountParticipantsTab(host) {
     <div id="p-msg" class="msg" role="status" aria-live="polite"></div>
     <p id="p-summary" class="muted"></p>
     <div class="actions">
-      <button id="p-export-all" class="secondary">Export all registrations (CSV)</button>
-      <button id="p-export-consented" class="secondary">Export mailing list (consented only)</button>
+      <button id="p-export-all" class="secondary">Export registrations / mailing list (CSV)</button>
     </div>
     <div class="table-scroll">
       <table>
-        <thead><tr><th>Name</th><th>Affiliation</th><th>Email</th><th>Listed</th></tr></thead>
+        <thead><tr><th>Name</th><th>Affiliation</th><th>Email</th></tr></thead>
         <tbody id="p-rows"></tbody>
       </table>
     </div>`;
@@ -40,14 +36,12 @@ export async function mountParticipantsTab(host) {
   const msg = host.querySelector("#p-msg");
   try {
     const users = sortParticipants(await listUsers());
-    const consented = users.filter((u) => u.showPublicly);
-    host.querySelector("#p-summary").textContent =
-      `${users.length} registered · ${consented.length} listed publicly`;
+    host.querySelector("#p-summary").textContent = `${users.length} registered`;
 
     const rows = host.querySelector("#p-rows");
     for (const user of users) {
       const tr = document.createElement("tr");
-      const cells = [user.displayName, user.affiliation, user.email, user.showPublicly ? "yes" : "no"];
+      const cells = [user.displayName, user.affiliation, user.email];
       for (const value of cells) {
         const td = document.createElement("td");
         td.textContent = value ?? "";
@@ -57,9 +51,7 @@ export async function mountParticipantsTab(host) {
     }
 
     host.querySelector("#p-export-all").addEventListener("click", () =>
-      download("pints-registrations.csv", toCsv(forExport(users), COLUMNS)));
-    host.querySelector("#p-export-consented").addEventListener("click", () =>
-      download("pints-mailing-list.csv", toCsv(forExport(consented), COLUMNS)));
+      download("pints-registrations.csv", toCsv(users, COLUMNS)));
 
     if (!users.length) {
       msg.className = "msg warn";

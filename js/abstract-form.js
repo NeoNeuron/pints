@@ -1,14 +1,15 @@
-import { ABSTRACT_TYPES } from "./config.mjs";
+import { ABSTRACT_TOPICS, TOPIC_LABELS } from "./config.mjs";
 import {
   parseAffiliationIndexes,
   parseAffiliations,
   validateAbstract,
 } from "./abstract-validation-utils.mjs";
+import { validateFigure } from "./figure-utils.mjs";
 import { renderAbstractHtml } from "./markdown.js";
-import { getMyAbstract, getSiteConfig, saveAbstract, withdrawAbstract } from "./db.js";
+import { deleteAbstract, getSiteConfig, newAbstractId, saveAbstract } from "./db.js";
+import { deleteFigure, uploadFigure } from "./storage.js";
 
 const TEMPLATE = `
-  <h2>Poster / talk abstract</h2>
   <p id="window-note" class="muted"></p>
   <div id="abs-msg" class="msg" role="status" aria-live="polite"></div>
   <p id="abs-status"></p>
@@ -16,6 +17,9 @@ const TEMPLATE = `
   <form id="abs-form" novalidate>
     <label for="abs-title">Title</label>
     <input id="abs-title" type="text" maxlength="200" required>
+
+    <label for="abs-topic">Topic</label>
+    <select id="abs-topic" required></select>
 
     <label for="abs-affiliations">Affiliations
       <span class="hint">One per line. The author numbers below refer to these, starting at 1.</span>
@@ -34,21 +38,34 @@ const TEMPLATE = `
     </div>
     <p><button type="button" id="abs-add-author" class="secondary">Add author</button></p>
 
-    <label for="abs-type">Presentation type</label>
-    <select id="abs-type"></select>
-
     <label for="abs-body">Abstract
       <span class="hint">Plain text with <code>*italic*</code> and <code>**bold**</code>.
         Maximum 2500 characters. <span id="abs-count"></span></span>
     </label>
     <textarea id="abs-body" maxlength="2500" required></textarea>
 
+    <label for="abs-figure">Figure <span class="hint">Optional. PNG, JPEG, or WebP,
+      up to 5 MB. Large images are shrunk automatically before upload.</span></label>
+    <input id="abs-figure" type="file" accept="image/png,image/jpeg,image/webp">
+    <p id="abs-figure-preview" hidden>
+      <img id="abs-figure-img" alt="Figure preview" style="max-width:16rem;height:auto">
+      <button type="button" id="abs-figure-remove" class="secondary">Remove figure</button>
+    </p>
+
+    <div class="checkline">
+      <input id="abs-no-talk" type="checkbox">
+      <label for="abs-no-talk">I do not want this poster to be considered for a talk
+        <span class="hint">By default every poster is considered. Tick this only if you
+          would rather not be offered a talk slot.</span>
+      </label>
+    </div>
+
     <h3>Preview</h3>
     <div id="abs-preview" class="card"></div>
 
     <div class="actions">
       <button type="submit" id="abs-save">Submit abstract</button>
-      <button type="button" id="abs-withdraw" class="danger" hidden>Withdraw</button>
+      <button type="button" id="abs-delete" class="danger" hidden>Delete this abstract</button>
     </div>
   </form>
 `;
@@ -67,7 +84,20 @@ function authorRow({ name = "", marks = "", presenting = false } = {}) {
   return tr;
 }
 
-export async function mountAbstractForm(host, { user, verified, isAdmin = false }) {
+/**
+ * Mount the editor for ONE abstract.
+ *
+ * `abstract` null means a new submission; otherwise the document to edit. The
+ * form no longer looks up the participant's submission itself, because there
+ * may be several — page-account.js owns the list and decides what to open.
+ * `onSaved` is called after a successful save or delete so the caller can
+ * refresh that list. `defaultAuthorName` seeds the first author row of a new
+ * submission — Firebase Auth carries no display name here, the profile does.
+ */
+export async function mountAbstractForm(
+  host,
+  { user, verified, isAdmin = false, abstract = null, defaultAuthorName = "", onSaved = () => {} },
+) {
   host.hidden = false;
   host.innerHTML = TEMPLATE;
 
@@ -75,18 +105,27 @@ export async function mountAbstractForm(host, { user, verified, isAdmin = false 
   const msg = $("#abs-msg");
   const form = $("#abs-form");
   const titleEl = $("#abs-title");
+  const topicEl = $("#abs-topic");
   const affEl = $("#abs-affiliations");
   const authorsEl = $("#abs-authors");
-  const typeEl = $("#abs-type");
   const bodyEl = $("#abs-body");
+  const figureEl = $("#abs-figure");
+  const figurePreview = $("#abs-figure-preview");
+  const figureImg = $("#abs-figure-img");
+  const figureRemove = $("#abs-figure-remove");
+  const noTalkEl = $("#abs-no-talk");
   const saveBtn = $("#abs-save");
-  const withdrawBtn = $("#abs-withdraw");
+  const deleteBtn = $("#abs-delete");
 
-  for (const type of ABSTRACT_TYPES) {
+  const placeholder = document.createElement("option");
+  placeholder.value = "";
+  placeholder.textContent = "Choose a topic…";
+  topicEl.append(placeholder);
+  for (const topic of ABSTRACT_TOPICS) {
     const option = document.createElement("option");
-    option.value = type;
-    option.textContent = type === "poster" ? "Poster" : "Contributed talk";
-    typeEl.append(option);
+    option.value = topic;
+    option.textContent = TOPIC_LABELS[topic] ?? topic;
+    topicEl.append(option);
   }
 
   const say = (text, kind = "ok") => {
@@ -114,33 +153,50 @@ export async function mountAbstractForm(host, { user, verified, isAdmin = false 
     ? `Submissions are open${deadline ? ` until ${deadline.toLocaleString("en-GB")}` : ""}.`
     : "Submissions are closed.";
 
-  const existing = await getMyAbstract(user.uid);
-  if (existing) {
-    titleEl.value = existing.title ?? "";
-    affEl.value = (existing.affiliations ?? []).join("\n");
-    bodyEl.value = existing.body ?? "";
-    typeEl.value = existing.type ?? "poster";
-    for (const author of existing.authors ?? []) {
+  // Figure state, tracked separately from the form fields: `pendingFile` is a
+  // chosen-but-not-yet-uploaded File, and figureUrl/figurePath are what is
+  // already in Storage. Uploading on submit rather than on pick means an
+  // abandoned form leaves no orphan object in the bucket.
+  let pendingFile = null;
+  let figureUrl = abstract?.figureUrl ?? null;
+  let figurePath = abstract?.figurePath ?? null;
+  let figureCleared = false;
+
+  const showFigure = (src) => {
+    figurePreview.hidden = !src;
+    if (src) figureImg.src = src;
+  };
+
+  const abstractId = abstract?.id ?? newAbstractId();
+
+  if (abstract) {
+    titleEl.value = abstract.title ?? "";
+    topicEl.value = abstract.topic ?? "";
+    affEl.value = (abstract.affiliations ?? []).join("\n");
+    bodyEl.value = abstract.body ?? "";
+    noTalkEl.checked = abstract.talkConsidered === false;
+    for (const author of abstract.authors ?? []) {
       authorsEl.append(authorRow({
         name: author.name,
         marks: (author.affiliationIndexes ?? []).map((i) => i + 1).join(","),
         presenting: author.presenting,
       }));
     }
+    showFigure(figureUrl);
     saveBtn.textContent = "Save changes";
 
     const status = document.createElement("span");
     status.className = "pill";
-    status.textContent = existing.status;
+    status.textContent = abstract.status;
     $("#abs-status").replaceChildren(document.createTextNode("Status: "), status);
   } else {
-    authorsEl.append(authorRow({ name: "", marks: "1", presenting: true }));
+    authorsEl.append(authorRow({ name: defaultAuthorName, marks: "1", presenting: true }));
   }
 
   // Only an accepted abstract is locked, matching the rules: its public copy
   // would otherwise go stale. Rejected and withdrawn stay editable so the
   // participant can revise and resubmit before the deadline.
-  const frozen = existing?.status === "accepted";
+  const frozen = abstract?.status === "accepted";
 
   // Organizers are exempt from the verification gate and the submission window,
   // because firestore.rules already grants them `allow write: if isAdmin()`.
@@ -154,9 +210,9 @@ export async function mountAbstractForm(host, { user, verified, isAdmin = false 
       + (!verified ? "your email is unverified" : "submissions are closed") + ".", "warn");
   } else if (!verified) say("Verify your email address before submitting.", "warn");
   else if (!windowOpen) say("Submissions are closed. You can still read your abstract.", "warn");
-  else if (existing?.status === "rejected") {
+  else if (abstract?.status === "rejected") {
     say("This abstract was not accepted. You can revise and resubmit it before the deadline.", "warn");
-  } else if (existing?.status === "withdrawn") {
+  } else if (abstract?.status === "withdrawn") {
     say("This abstract was withdrawn by the organizers. You can revise and resubmit it before the deadline.", "warn");
   }
 
@@ -165,7 +221,7 @@ export async function mountAbstractForm(host, { user, verified, isAdmin = false 
       field.disabled = true;
     }
   }
-  withdrawBtn.hidden = !(existing && editable);
+  deleteBtn.hidden = !(abstract && editable);
 
   const refreshPreview = () => {
     $("#abs-preview").innerHTML = renderAbstractHtml(bodyEl.value);
@@ -176,8 +232,30 @@ export async function mountAbstractForm(host, { user, verified, isAdmin = false 
 
   $("#abs-add-author").addEventListener("click", () => authorsEl.append(authorRow()));
 
+  figureEl.addEventListener("change", () => {
+    const file = figureEl.files?.[0] ?? null;
+    if (!file) return;
+    const { valid, errors } = validateFigure({ type: file.type, size: file.size });
+    if (!valid) {
+      figureEl.value = "";
+      return sayErrors(errors);
+    }
+    pendingFile = file;
+    figureCleared = false;
+    showFigure(URL.createObjectURL(file));
+    say("Figure ready. It is uploaded when you submit the form.", "ok");
+  });
+
+  figureRemove.addEventListener("click", () => {
+    pendingFile = null;
+    figureEl.value = "";
+    figureCleared = Boolean(figurePath);
+    showFigure(null);
+  });
+
   const collect = () => ({
     title: titleEl.value,
+    topic: topicEl.value,
     affiliations: parseAffiliations(affEl.value),
     authors: [...authorsEl.querySelectorAll("tr")].map((tr) => ({
       name: tr.querySelector(".a-name").value.trim(),
@@ -185,7 +263,7 @@ export async function mountAbstractForm(host, { user, verified, isAdmin = false 
       presenting: tr.querySelector(".a-presenting").checked,
     })),
     body: bodyEl.value,
-    type: typeEl.value,
+    talkConsidered: !noTalkEl.checked,
   });
 
   form.addEventListener("submit", async (e) => {
@@ -196,10 +274,25 @@ export async function mountAbstractForm(host, { user, verified, isAdmin = false 
 
     saveBtn.disabled = true;
     try {
-      await saveAbstract(user.uid, draft);
+      // Upload before the document write: if Storage fails the abstract is not
+      // saved pointing at a figure that does not exist.
+      if (pendingFile) {
+        say("Uploading the figure…", "ok");
+        ({ url: figureUrl, path: figurePath } = await uploadFigure(user.uid, abstractId, pendingFile));
+        pendingFile = null;
+      } else if (figureCleared) {
+        await deleteFigure(figurePath);
+        figureUrl = null;
+        figurePath = null;
+        figureCleared = false;
+      }
+
+      await saveAbstract(abstractId, user.uid, { ...draft, figureUrl, figurePath });
       say("Abstract saved. You can edit it until the deadline.", "ok");
-      withdrawBtn.hidden = false;
+      deleteBtn.hidden = false;
       saveBtn.textContent = "Save changes";
+      figureEl.value = "";
+      await onSaved();
     } catch (err) {
       say("Could not save your abstract. Please try again.", "err");
       console.error("[pints] saveAbstract", err);
@@ -208,14 +301,19 @@ export async function mountAbstractForm(host, { user, verified, isAdmin = false 
     }
   });
 
-  withdrawBtn.addEventListener("click", async () => {
-    if (!confirm("Withdraw your abstract? This cannot be undone.")) return;
+  deleteBtn.addEventListener("click", async () => {
+    if (!confirm(`Delete “${abstract?.title ?? "this abstract"}”? This cannot be undone.`)) return;
+    deleteBtn.disabled = true;
     try {
-      await withdrawAbstract(user.uid);
-      location.reload();
+      await deleteAbstract(abstractId);
+      // Best-effort: an orphaned figure is invisible and costs nothing, whereas
+      // failing the delete over it would leave the abstract in place.
+      await deleteFigure(figurePath).catch((err) => console.error("[pints] deleteFigure", err));
+      await onSaved();
     } catch (err) {
-      say("Could not withdraw the abstract.", "err");
-      console.error("[pints] withdrawAbstract", err);
+      say("Could not delete the abstract.", "err");
+      console.error("[pints] deleteAbstract", err);
+      deleteBtn.disabled = false;
     }
   });
 }

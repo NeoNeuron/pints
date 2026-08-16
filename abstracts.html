@@ -11,12 +11,14 @@
 <header id="site-header"></header>
 <main class="wrap">
   <h1>Abstracts</h1>
-  <div class="prose" data-markdown="content/poster-guidelines.md"></div>
+  <div class="prose" data-markdown="content/poster-guidelines.md" data-page="poster-guidelines"></div>
   <p>
     <label for="q">Search
       <span class="hint">Matches titles, authors, affiliations, and abstract text.</span>
     </label>
     <input id="q" type="text" autocomplete="off">
+    <label for="topic">Topic</label>
+    <select id="topic"></select>
   </p>
   <p id="count" class="muted"></p>
   <div id="msg" class="msg" role="status" aria-live="polite"></div>

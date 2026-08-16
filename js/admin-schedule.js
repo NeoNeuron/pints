@@ -1,16 +1,16 @@
 import { SCHEDULE_KINDS } from "./config.mjs";
-import { formatDayHeading, formatTimeRange, groupByDay } from "./schedule-utils.mjs";
+import { formatTimeRange, sortScheduleItems } from "./schedule-utils.mjs";
 import { deleteScheduleItem, listSchedule, saveScheduleItem } from "./db.js";
 
+// PINTS is one day in one venue, so there is no date, no room, and no manual
+// rank: the start time is the whole ordering. The event date itself lives in
+// config/site and is edited on the Settings tab.
 const FIELDS = [
-  { key: "day", label: "Day", type: "date", required: true },
   { key: "start", label: "Start", type: "time" },
   { key: "end", label: "End", type: "time" },
   { key: "title", label: "Title", type: "text", required: true },
   { key: "speaker", label: "Speaker", type: "text" },
   { key: "affiliation", label: "Affiliation", type: "text" },
-  { key: "location", label: "Location", type: "text" },
-  { key: "order", label: "Order", type: "number" },
 ];
 
 export async function mountScheduleTab(host) {
@@ -36,17 +36,10 @@ export async function mountScheduleTab(host) {
     const label = document.createElement("label");
     label.setAttribute("for", `s-${spec.key}`);
     label.textContent = spec.label;
-    if (spec.key === "order") {
-      const hint = document.createElement("span");
-      hint.className = "hint";
-      hint.textContent = "Tie-break for items sharing a start time. Lower shows first.";
-      label.append(hint);
-    }
     const input = document.createElement("input");
     input.id = `s-${spec.key}`;
     input.type = spec.type;
     if (spec.required) input.required = true;
-    if (spec.key === "order") input.value = "0";
     form.append(label, input);
   }
 
@@ -80,7 +73,7 @@ export async function mountScheduleTab(host) {
 
   function resetForm() {
     editingId = null;
-    for (const spec of FIELDS) field(spec.key).value = spec.key === "order" ? "0" : "";
+    for (const spec of FIELDS) field(spec.key).value = "";
     kindSelect.value = "talk";
     heading.textContent = "Add an item";
     save.textContent = "Add item";
@@ -89,9 +82,7 @@ export async function mountScheduleTab(host) {
 
   function loadIntoForm(item) {
     editingId = item.id;
-    for (const spec of FIELDS) {
-      field(spec.key).value = item[spec.key] ?? (spec.key === "order" ? "0" : "");
-    }
+    for (const spec of FIELDS) field(spec.key).value = item[spec.key] ?? "";
     kindSelect.value = item.kind ?? "talk";
     heading.textContent = `Editing: ${item.title}`;
     save.textContent = "Save changes";
@@ -113,8 +104,8 @@ export async function mountScheduleTab(host) {
     const who = document.createElement("td");
     who.textContent = [item.speaker, item.affiliation].filter(Boolean).join(" — ");
 
-    const where = document.createElement("td");
-    where.textContent = item.location ?? "";
+    const kind = document.createElement("td");
+    kind.textContent = item.kind ?? "other";
 
     const tools = document.createElement("td");
     const edit = document.createElement("button");
@@ -140,39 +131,33 @@ export async function mountScheduleTab(host) {
     });
     tools.append(edit, " ", remove);
 
-    tr.append(time, what, who, where, tools);
+    tr.append(time, what, who, kind, tools);
     return tr;
   }
 
   async function render() {
-    const days = groupByDay(await listSchedule());
+    const items = sortScheduleItems(await listSchedule());
     listEl.replaceChildren();
-    if (!days.length) {
+    if (!items.length) {
       say("The program is empty. Add the first item above.", "warn");
       return;
     }
-    for (const { day, items } of days) {
-      const h3 = document.createElement("h3");
-      h3.textContent = formatDayHeading(day);
-
-      const wrap = document.createElement("div");
-      wrap.className = "table-scroll";
-      const table = document.createElement("table");
-      table.innerHTML =
-        "<thead><tr><th>Time</th><th>What</th><th>Who</th><th>Where</th><th></th></tr></thead>";
-      const tbody = document.createElement("tbody");
-      for (const item of items) tbody.append(row(item, render));
-      table.append(tbody);
-      wrap.append(table);
-      listEl.append(h3, wrap);
-    }
+    const wrap = document.createElement("div");
+    wrap.className = "table-scroll";
+    const table = document.createElement("table");
+    table.innerHTML =
+      "<thead><tr><th>Time</th><th>What</th><th>Who</th><th>Kind</th><th></th></tr></thead>";
+    const tbody = document.createElement("tbody");
+    for (const item of items) tbody.append(row(item, render));
+    table.append(tbody);
+    wrap.append(table);
+    listEl.append(wrap);
   }
 
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
     const data = Object.fromEntries(FIELDS.map((s) => [s.key, field(s.key).value.trim()]));
-    if (!data.day || !data.title) return say("Day and title are required.", "err");
-    data.order = Number(data.order || 0);
+    if (!data.title) return say("A title is required.", "err");
     data.kind = kindSelect.value;
 
     save.disabled = true;

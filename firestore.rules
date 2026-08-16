@@ -46,24 +46,29 @@ service cloud.firestore {
 
     function validAbstract(data, uid) {
       return data.keys().hasOnly(['ownerUid', 'edition', 'title', 'affiliations', 'authors',
-                                  'body', 'type', 'status', 'createdAt', 'updatedAt'])
+                                  'body', 'topic', 'talkConsidered', 'figureUrl', 'figurePath',
+                                  'status', 'createdAt', 'updatedAt'])
         && data.keys().hasAll(['ownerUid', 'edition', 'title', 'affiliations', 'authors',
-                               'body', 'type', 'status'])
+                               'body', 'topic', 'talkConsidered', 'status'])
         && data.ownerUid == uid
         && data.edition is string
         && str(data.title, 200)
         && str(data.body, 2500)
-        && data.type in ['poster', 'talk']
+        && data.topic in ['cognitive', 'systems', 'computational']
+        && data.talkConsidered is bool
+        && (!('figureUrl' in data) || data.figureUrl == null || str(data.figureUrl, 500))
+        && (!('figurePath' in data) || data.figurePath == null || str(data.figurePath, 300))
         && data.authors is list && data.authors.size() > 0 && data.authors.size() <= 20
         && data.affiliations is list && data.affiliations.size() <= 10;
     }
 
+    // PINTS is a single day in a single venue, so there is no day, no room, and
+    // no manual rank: `start` is the whole ordering.
     function validScheduleItem(data) {
-      return data.keys().hasOnly(['edition', 'day', 'start', 'end', 'title', 'speaker',
-                                  'affiliation', 'kind', 'location', 'abstractUid', 'order'])
-        && data.keys().hasAll(['edition', 'day', 'title', 'kind'])
+      return data.keys().hasOnly(['edition', 'start', 'end', 'title', 'speaker',
+                                  'affiliation', 'kind', 'abstractId'])
+        && data.keys().hasAll(['edition', 'title', 'kind'])
         && data.edition is string
-        && data.day is string
         && str(data.title, 200)
         && data.kind in ['keynote', 'talk', 'poster', 'break', 'lunch', 'social', 'other'];
     }
@@ -110,11 +115,12 @@ service cloud.firestore {
     }
 
     // Public projection of a participant's name, written by the participant
-    // themselves: the existence of this document IS the consent record.
+    // themselves as part of registering. There is no opt-out: account.html says
+    // plainly that registering puts you on the list.
     //
-    // Deliberately no get() on users/{uid}.showPublicly. A get() would read
-    // pre-batch state and so break the single writeBatch that flips consent and
-    // publishes in one go — and it buys no confidentiality, because a user can
+    // Deliberately no get() on users/{uid}. A get() would read pre-batch state
+    // and so break the single writeBatch that saves the profile and publishes
+    // the name together — and it buys no confidentiality, because a user can
     // only ever publish their own name.
     match /participants_public/{uid} {
       allow read: if true;
@@ -127,42 +133,60 @@ service cloud.firestore {
       allow delete: if isOwner(uid) || isAdmin();
     }
 
-    // One abstract per participant: the document id IS the owner's uid, so the
-    // owner reads it with a direct get() and needs no list permission at all.
-    match /abstracts/{uid} {
-      allow get: if isOwner(uid) || isAdmin();
-      allow list: if isAdmin();
+    // Many abstracts per participant, so the document id is an auto-id and
+    // ownership lives in the ownerUid field.
+    //
+    // `list` is evaluated once per candidate document, which means a query that
+    // does NOT filter on ownerUid is rejected outright for a non-admin. That is
+    // load-bearing: it is the only thing stopping a signed-in user from reading
+    // the whole submission pile. db.js listMyAbstracts() filters accordingly.
+    match /abstracts/{abstractId} {
+      allow get, list: if isAdmin()
+        || (isSignedIn() && resource.data.ownerUid == request.auth.uid);
 
-      allow create: if isOwner(uid) && isVerified() && submissionWindowOpen()
-        && validAbstract(request.resource.data, uid)
+      allow create: if isVerified() && submissionWindowOpen()
+        && isOwner(request.resource.data.ownerUid)
+        && validAbstract(request.resource.data, request.auth.uid)
         && request.resource.data.status == 'submitted';
 
       // Frozen on acceptance ONLY. An edit after acceptance would leave
       // abstracts_public stale and a withdrawal would orphan the published copy.
-      //
-      // Rejected and withdrawn MUST stay editable: the document id is the
-      // owner's uid, so a rejected participant with a frozen document could
-      // neither revise, delete, nor replace it — there is no second slot.
-      allow update: if isOwner(uid) && isVerified() && submissionWindowOpen()
+      // Rejected and withdrawn stay editable so the participant can revise and
+      // resubmit before the deadline.
+      allow update: if isVerified() && submissionWindowOpen()
+        && isOwner(resource.data.ownerUid)
+        && request.resource.data.ownerUid == resource.data.ownerUid
         && resource.data.status in ['submitted', 'rejected', 'withdrawn']
         && request.resource.data.status == 'submitted'
-        && validAbstract(request.resource.data, uid);
+        && validAbstract(request.resource.data, request.auth.uid);
 
-      allow delete: if isOwner(uid) && resource.data.status != 'accepted';
+      allow delete: if isOwner(resource.data.ownerUid) && resource.data.status != 'accepted';
 
       allow write: if isAdmin();
     }
 
     // Admin-only decisions. A separate document precisely because rules cannot
     // hide a field from a document's owner.
-    match /abstract_reviews/{uid} {
+    match /abstract_reviews/{abstractId} {
       allow read, write: if isAdmin();
     }
 
     // Public projection, written by the admin console on acceptance.
-    match /abstracts_public/{uid} {
+    match /abstracts_public/{abstractId} {
       allow read: if true;
       allow write: if isAdmin();
+    }
+
+    // Editable page copy, written from the admin console so organizers do not
+    // need a GitHub account to fix a typo. A missing document is not an error:
+    // the site falls back to the markdown committed under content/.
+    match /pages/{slug} {
+      allow read: if true;
+      allow write: if isAdmin()
+        && request.resource.data.keys().hasOnly(['markdown', 'updatedAt', 'updatedBy'])
+        && request.resource.data.markdown is string
+        && request.resource.data.markdown.size() <= 20000;
+      allow delete: if isAdmin();
     }
 
     // The program. World-readable so the page works signed out.

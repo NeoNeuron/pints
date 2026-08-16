@@ -3,9 +3,8 @@ import assert from "node:assert/strict";
 import {
   formatDayHeading,
   formatTimeRange,
-  groupByDay,
   parseTime,
-  sortDayItems,
+  sortScheduleItems,
 } from "../js/schedule-utils.mjs";
 
 test("parseTime converts HH:MM to minutes", () => {
@@ -27,45 +26,44 @@ test("formatTimeRange joins start and end with an en dash", () => {
   assert.equal(formatTimeRange("bogus", "10:30"), "");
 });
 
-test("sortDayItems orders by start time then by explicit order", () => {
-  const sorted = sortDayItems([
-    { title: "Late", start: "14:00", order: 0 },
-    { title: "Second", start: "09:00", order: 1 },
-    { title: "First", start: "09:00", order: 0 },
+test("sortScheduleItems orders by start time", () => {
+  const sorted = sortScheduleItems([
+    { title: "Afternoon", start: "14:00" },
+    { title: "Lunch", start: "12:30" },
+    { title: "Opening", start: "09:00" },
   ]);
-  assert.deepEqual(sorted.map((i) => i.title), ["First", "Second", "Late"]);
+  assert.deepEqual(sorted.map((i) => i.title), ["Opening", "Lunch", "Afternoon"]);
 });
 
-test("sortDayItems pushes items with unparseable times to the end", () => {
-  const sorted = sortDayItems([{ title: "No time" }, { title: "Timed", start: "10:00" }]);
+test("sortScheduleItems breaks a shared start time on the end time", () => {
+  const sorted = sortScheduleItems([
+    { title: "Long", start: "09:00", end: "10:00" },
+    { title: "Short", start: "09:00", end: "09:15" },
+  ]);
+  assert.deepEqual(sorted.map((i) => i.title), ["Short", "Long"]);
+});
+
+test("sortScheduleItems falls back to the title when times are identical", () => {
+  const sorted = sortScheduleItems([
+    { title: "Beta", start: "09:00", end: "10:00" },
+    { title: "Alpha", start: "09:00", end: "10:00" },
+  ]);
+  assert.deepEqual(sorted.map((i) => i.title), ["Alpha", "Beta"]);
+});
+
+test("sortScheduleItems pushes items with unparseable times to the end", () => {
+  const sorted = sortScheduleItems([{ title: "No time" }, { title: "Timed", start: "10:00" }]);
   assert.deepEqual(sorted.map((i) => i.title), ["Timed", "No time"]);
 });
 
-test("sortDayItems does not mutate its input", () => {
+test("sortScheduleItems does not mutate its input", () => {
   const input = [{ start: "12:00" }, { start: "09:00" }];
-  sortDayItems(input);
+  sortScheduleItems(input);
   assert.deepEqual(input.map((i) => i.start), ["12:00", "09:00"]);
 });
 
-test("groupByDay groups, orders days chronologically, and sorts within each day", () => {
-  const grouped = groupByDay([
-    { day: "2026-11-13", start: "09:00", title: "Day2 first" },
-    { day: "2026-11-12", start: "14:00", title: "Day1 second" },
-    { day: "2026-11-12", start: "09:00", title: "Day1 first" },
-  ]);
-  assert.deepEqual(grouped.map((g) => g.day), ["2026-11-12", "2026-11-13"]);
-  assert.deepEqual(grouped[0].items.map((i) => i.title), ["Day1 first", "Day1 second"]);
-  assert.deepEqual(grouped[1].items.map((i) => i.title), ["Day2 first"]);
-});
-
-test("groupByDay returns an empty array for no items", () => {
-  assert.deepEqual(groupByDay([]), []);
-});
-
-test("groupByDay does not mutate its input", () => {
-  const input = [{ day: "2026-11-12", start: "14:00" }, { day: "2026-11-12", start: "09:00" }];
-  groupByDay(input);
-  assert.deepEqual(input.map((i) => i.start), ["14:00", "09:00"]);
+test("sortScheduleItems handles an empty program", () => {
+  assert.deepEqual(sortScheduleItems([]), []);
 });
 
 test("formatDayHeading renders a readable date and falls back on bad input", () => {

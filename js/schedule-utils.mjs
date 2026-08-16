@@ -1,4 +1,5 @@
 const LATEST = Number.MAX_SAFE_INTEGER;
+const collator = new Intl.Collator("en", { sensitivity: "base" });
 
 /** "09:30" -> 570 minutes. Returns null for anything malformed. */
 export function parseTime(hhmm) {
@@ -11,24 +12,19 @@ export function formatTimeRange(start, end) {
   return parseTime(end) === null ? String(start) : `${start}–${end}`;
 }
 
-/** Start time, then the explicit order field. Returns a new array. */
-export function sortDayItems(items) {
+/**
+ * Start time, then end time, then title. Returns a new array.
+ *
+ * PINTS runs for a single day, so the start time is the whole ordering: there
+ * is no manual rank field to tie-break on any more. Items with no usable start
+ * time sort last rather than first, so a half-filled draft item does not jump
+ * to the top of the published program.
+ */
+export function sortScheduleItems(items) {
   return [...items].sort((a, b) =>
     (parseTime(a?.start) ?? LATEST) - (parseTime(b?.start) ?? LATEST) ||
-    (a?.order ?? 0) - (b?.order ?? 0));
-}
-
-/** [{day, items}] in chronological day order, each day internally sorted. */
-export function groupByDay(items) {
-  const byDay = new Map();
-  for (const item of items) {
-    const day = item?.day ?? "";
-    if (!byDay.has(day)) byDay.set(day, []);
-    byDay.get(day).push(item);
-  }
-  return [...byDay.entries()]
-    .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
-    .map(([day, entries]) => ({ day, items: sortDayItems(entries) }));
+    (parseTime(a?.end) ?? LATEST) - (parseTime(b?.end) ?? LATEST) ||
+    collator.compare(String(a?.title ?? ""), String(b?.title ?? "")));
 }
 
 /**

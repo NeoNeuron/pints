@@ -25,6 +25,7 @@ export function filterAbstracts(list, term) {
     const haystack = [
       a?.title ?? "",
       a?.body ?? "",
+      a?.topic ?? "",
       ...(a?.authors ?? []).map((author) => author?.name ?? ""),
       ...(a?.affiliations ?? []),
     ].join(" ").toLowerCase();

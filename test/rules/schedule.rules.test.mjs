@@ -10,15 +10,12 @@ beforeEach(async () => { await env.clearFirestore(); });
 
 const item = (over = {}) => ({
   edition: "pints2026",
-  day: "2026-11-12",
   start: "09:30",
   end: "10:30",
   title: "Opening keynote",
   speaker: "Julijana Gjorgjieva",
   affiliation: "TU Munich",
   kind: "keynote",
-  location: "Amphi A",
-  order: 0,
   ...over,
 });
 
@@ -49,7 +46,7 @@ test("an admin can add, edit, and delete schedule items", async () => {
 test("an admin can add an item with only the required fields", async () => {
   await seedAdmin(env, "boss");
   await assertSucceeds(setDoc(doc(asUser(env, "boss"), "schedule", "s1"), {
-    edition: "pints2026", day: "2026-11-12", title: "Coffee", kind: "break",
+    edition: "pints2026", title: "Coffee", kind: "break",
   }));
 });
 
@@ -61,6 +58,16 @@ test("an admin cannot write a malformed schedule item", async () => {
   await assertFails(setDoc(doc(fs, "schedule", "s1"), item({ title: "x".repeat(201) })));
   await assertFails(setDoc(doc(fs, "schedule", "s1"), item({ surprise: true })));
 
-  const { day, ...noDay } = item();
-  await assertFails(setDoc(doc(fs, "schedule", "s1"), noDay));
+  const { title, ...noTitle } = item();
+  await assertFails(setDoc(doc(fs, "schedule", "s1"), noTitle));
+});
+
+// PINTS is one day in one venue. These three fields were dropped, so writing
+// them must now fail rather than silently persisting dead data.
+test("day, location, and order are no longer accepted", async () => {
+  await seedAdmin(env, "boss");
+  const fs = asUser(env, "boss");
+  await assertFails(setDoc(doc(fs, "schedule", "s1"), item({ day: "2026-11-12" })));
+  await assertFails(setDoc(doc(fs, "schedule", "s1"), item({ location: "Amphi A" })));
+  await assertFails(setDoc(doc(fs, "schedule", "s1"), item({ order: 0 })));
 });

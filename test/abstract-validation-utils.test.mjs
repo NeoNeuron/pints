@@ -14,7 +14,8 @@ const good = (over = {}) => ({
     { name: "Bob Martin", affiliationIndexes: [0, 1], presenting: false },
   ],
   body: "We recorded from mouse V1 and found *structure*.",
-  type: "poster",
+  topic: "systems",
+  talkConsidered: true,
   ...over,
 });
 
@@ -81,9 +82,19 @@ test("exactly one presenting author is required", () => {
   }), openNow).errors.some((e) => /only one presenting author/i.test(e)));
 });
 
-test("the presentation type must be poster or talk", () => {
-  assert.ok(validateAbstract(good({ type: "keynote" }), openNow)
-    .errors.some((e) => /poster or talk/.test(e)));
+test("a topic is required and must be one of the three", () => {
+  assert.ok(validateAbstract(good({ topic: "quantum" }), openNow)
+    .errors.some((e) => /topic/i.test(e)));
+  assert.ok(validateAbstract(good({ topic: "" }), openNow)
+    .errors.some((e) => /topic/i.test(e)));
+  for (const topic of ["cognitive", "systems", "computational"]) {
+    assert.ok(validateAbstract(good({ topic }), openNow).valid, `${topic} should validate`);
+  }
+});
+
+test("the talk opt-out is not a validation concern either way", () => {
+  assert.ok(validateAbstract(good({ talkConsidered: false }), openNow).valid);
+  assert.ok(validateAbstract(good({ talkConsidered: undefined }), openNow).valid);
 });
 
 test("submissions closed and passed deadlines are rejected", () => {

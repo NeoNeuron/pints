@@ -64,6 +64,13 @@ main { padding-block: 2rem 1rem; }
 .card h3 { margin: 0 0 .25rem; }
 .card .byline { color: var(--muted); font-size: .92rem; margin: 0 0 .5rem; }
 
+/* The abstract-submission disclosure on account.html. Closed by default, so the
+   summary has to read as a button people can find. */
+details { border: 1px solid var(--line); border-radius: var(--radius); margin: 1rem 0; }
+details > summary { padding: .75rem 1rem; cursor: pointer; font-weight: 600; }
+details[open] > summary { border-bottom: 1px solid var(--line); }
+details > :not(summary) { padding: 0 1rem 1rem; }
+
 .table-scroll { overflow-x: auto; }
 table { border-collapse: collapse; width: 100%; }
 th, td { text-align: left; padding: .5rem .75rem; border-bottom: 1px solid var(--line); vertical-align: top; }

@@ -3,8 +3,15 @@
  * module stays pure and testable under Node.
  *
  * Two allowlists, deliberately different:
- *  - PAGE_ALLOWLIST     repo-authored content/*.md, written by organizers we trust.
+ *  - PAGE_ALLOWLIST     page copy, written by organizers we trust. It reaches us
+ *    either from content/*.md in the repo or from pages/{slug} in Firestore via
+ *    the admin console — same authors either way, since firestore.rules lets
+ *    only admins write that collection, and an admin already holds full database
+ *    write access. Sanitization still runs: it is what stops a stolen admin
+ *    session from turning page copy into script execution.
  *  - ABSTRACT_ALLOWLIST participant-submitted abstract bodies. Untrusted input.
+ *    Note it has no "img" — figures are a separate, validated field rendered
+ *    with createElement, never through markdown.
  */
 
 export const PAGE_ALLOWLIST = {

@@ -1,9 +1,11 @@
+import { ABSTRACT_TYPES, TOPIC_LABELS } from "./config.mjs";
 import { authorLineParts, nextPosterNumber } from "./abstract-utils.mjs";
 import { renderAbstractHtml } from "./markdown.js";
 import {
   getReview,
   listAbstracts,
   listPublicAbstracts,
+  listUsers,
   publishAbstract,
   saveReview,
   setAbstractStatus,
@@ -43,7 +45,7 @@ export async function mountAbstractsTab(host, { adminUid }) {
     msg.textContent = text;
   };
 
-  function card(abstract, published, refresh) {
+  function card(abstract, published, submitters, refresh) {
     const article = document.createElement("article");
     article.className = "card";
 
@@ -54,22 +56,56 @@ export async function mountAbstractsTab(host, { adminUid }) {
     byline.className = "byline";
     byline.append(authorsLine(abstract));
 
+    // With many abstracts per person the document id no longer says who
+    // submitted it, so the owner is spelled out.
+    const submitter = submitters.get(abstract.ownerUid);
+    const from = document.createElement("p");
+    from.className = "muted";
+    from.textContent = submitter
+      ? `Submitted by ${submitter.displayName ?? "unknown"} (${submitter.email ?? "no email"})`
+      : `Submitted by uid ${abstract.ownerUid}`;
+
     const affil = document.createElement("p");
     affil.className = "byline";
     affil.textContent = (abstract.affiliations ?? [])
       .map((a, i) => `${i + 1}. ${a}`).join("   ");
 
     const meta = document.createElement("p");
-    for (const label of [abstract.type, abstract.status]) {
+    for (const label of [TOPIC_LABELS[abstract.topic] ?? abstract.topic, abstract.status]) {
+      if (!label) continue;
       const pill = document.createElement("span");
       pill.className = "pill";
       pill.textContent = label;
       meta.append(pill, " ");
     }
+    if (abstract.talkConsidered === false) {
+      const optOut = document.createElement("span");
+      optOut.className = "muted";
+      optOut.textContent = "the submitter asked not to be considered for a talk";
+      meta.append(optOut);
+    }
 
     const body = document.createElement("div");
     // The one innerHTML on this page, through the unit-tested tight allowlist.
     body.innerHTML = renderAbstractHtml(abstract.body);
+
+    // createElement, not markdown: ABSTRACT_ALLOWLIST forbids <img> in the body
+    // and must keep doing so. The figure is a separate, validated field.
+    const figure = document.createElement("p");
+    if (abstract.figureUrl) {
+      const link = document.createElement("a");
+      link.href = abstract.figureUrl;
+      link.target = "_blank";
+      link.rel = "noopener";
+      const img = document.createElement("img");
+      img.src = abstract.figureUrl;
+      img.alt = "Submitted figure";
+      img.loading = "lazy";
+      img.style.maxWidth = "20rem";
+      img.style.height = "auto";
+      link.append(img);
+      figure.append(link);
+    }
 
     const noteLabel = document.createElement("label");
     noteLabel.textContent = "Reviewer note (never visible to the submitter)";
@@ -80,14 +116,32 @@ export async function mountAbstractsTab(host, { adminUid }) {
     const actions = document.createElement("div");
     actions.className = "actions";
 
+    // Poster vs talk is the committee's call, not the submitter's: everything
+    // arrives as a poster and some are promoted here.
+    const alreadyPublished = published.find((p) => p.id === abstract.id);
+    const typeSelect = document.createElement("select");
+    typeSelect.title = "Present as";
+    typeSelect.style.maxWidth = "9rem";
+    for (const type of ABSTRACT_TYPES) {
+      const option = document.createElement("option");
+      option.value = type;
+      option.textContent = type === "poster" ? "Poster" : "Talk";
+      typeSelect.append(option);
+    }
+    typeSelect.value = alreadyPublished?.type ?? "poster";
+    if (abstract.talkConsidered === false) {
+      typeSelect.title = "The submitter asked not to be considered for a talk";
+    }
+
     const posterInput = document.createElement("input");
     posterInput.type = "number";
     posterInput.min = "1";
     posterInput.style.maxWidth = "6rem";
     posterInput.title = "Poster board number";
-    posterInput.value = String(
-      published.find((p) => p.id === abstract.id)?.posterNumber ?? nextPosterNumber(published));
-    if (abstract.type !== "poster") posterInput.hidden = true;
+    posterInput.value = String(alreadyPublished?.posterNumber ?? nextPosterNumber(published));
+    const syncPosterInput = () => { posterInput.hidden = typeSelect.value !== "poster"; };
+    typeSelect.addEventListener("change", syncPosterInput);
+    syncPosterInput();
 
     const guarded = (label, className, fn) => {
       const button = document.createElement("button");
@@ -111,7 +165,8 @@ export async function mountAbstractsTab(host, { adminUid }) {
       abstract.status === "accepted" ? "Re-publish" : "Accept & publish", "",
       async () => {
         await saveReview(abstract.id, { note: note.value, decidedBy: adminUid });
-        await publishAbstract(abstract.id, abstract, Number(posterInput.value));
+        await publishAbstract(abstract.id, abstract,
+          { type: typeSelect.value, posterNumber: Number(posterInput.value) });
         say(`Published “${abstract.title}”.`, "ok");
       });
 
@@ -140,8 +195,8 @@ export async function mountAbstractsTab(host, { adminUid }) {
     });
     pull.hidden = abstract.status !== "accepted";
 
-    actions.append(posterInput, accept, reject, saveNote, pull);
-    article.append(h3, byline, affil, meta, body, noteLabel, note, actions);
+    actions.append(typeSelect, posterInput, accept, reject, saveNote, pull);
+    article.append(h3, byline, from, affil, meta, body, figure, noteLabel, note, actions);
 
     // Reviewer notes live in a separate collection because rules cannot hide a
     // field from a document's owner. Fetched after render so one failure does
@@ -154,7 +209,12 @@ export async function mountAbstractsTab(host, { adminUid }) {
   }
 
   async function render() {
-    const [abstracts, published] = await Promise.all([listAbstracts(), listPublicAbstracts()]);
+    // One listUsers() for the whole page, joined on ownerUid — far cheaper than
+    // a getProfile() per card.
+    const [abstracts, published, users] = await Promise.all([
+      listAbstracts(), listPublicAbstracts(), listUsers(),
+    ]);
+    const submitters = new Map(users.map((u) => [u.id, u]));
 
     const counts = {};
     for (const a of abstracts) counts[a.status] = (counts[a.status] ?? 0) + 1;
@@ -162,7 +222,7 @@ export async function mountAbstractsTab(host, { adminUid }) {
       `${abstracts.length} submitted · ${counts.accepted ?? 0} accepted · ` +
       `${counts.rejected ?? 0} rejected · ${counts.withdrawn ?? 0} withdrawn`;
 
-    listEl.replaceChildren(...abstracts.map((a) => card(a, published, render)));
+    listEl.replaceChildren(...abstracts.map((a) => card(a, published, submitters, render)));
     if (!abstracts.length) say("No abstracts have been submitted yet.", "warn");
   }
 

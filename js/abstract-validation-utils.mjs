@@ -1,4 +1,4 @@
-import { ABSTRACT_TYPES, LIMITS } from "./config.mjs";
+import { ABSTRACT_TOPICS, LIMITS } from "./config.mjs";
 
 /** One affiliation per line; blanks dropped. */
 export function parseAffiliations(text) {
@@ -64,8 +64,8 @@ export function validateAbstract(
   if (presenting === 0) errors.push("Mark one presenting author.");
   else if (presenting > 1) errors.push("There can be only one presenting author.");
 
-  if (!ABSTRACT_TYPES.includes(input?.type)) {
-    errors.push("Presentation type must be poster or talk.");
+  if (!ABSTRACT_TOPICS.includes(input?.topic)) {
+    errors.push("Choose a topic: cognitive, systems, or computational.");
   }
 
   return { valid: errors.length === 0, errors };

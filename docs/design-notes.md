@@ -69,14 +69,29 @@ projection collections** written alongside the private original —
 This is the single most load-bearing idea in the codebase. Field-level read rules
 do not exist; do not attempt them.
 
-### 3.2 Cloud Storage left the free plan
+### 3.2 Cloud Storage costs money, and we now pay it
 
 As of February 2026, Cloud Storage requires the Blaze plan and a credit card.
 Firestore, Auth, and Auth's emails remain free on Spark.
 
-So: **no file uploads anywhere.** Abstracts are structured text. Posters are
-physical A0, so nothing needs hosting. The mailing list degrades to a CSV export.
-Nothing in the site requires billing — preserve that property.
+The site ran on Spark until figure uploads were added to abstract submission.
+That one feature is what moved the project to Blaze — there is no way to host a
+participant's image on Firebase without it. In practice the bill is nil: the
+free allowance is 5 GB stored and 1 GB/day downloaded, and a conference's worth
+of figures is a few hundred megabytes at most.
+
+Two things follow, and both matter:
+
+- **Storage is the only paid service in use.** Cloud Functions are still not
+  enabled and should not be. Every other constraint in this document (no server,
+  rules as the sole authorization boundary) is unchanged.
+- **Uploads are downscaled in the browser first** (`js/storage.js`), to a
+  1600px longest edge. Not to save the bucket — to save the visitors, since
+  every accepted figure is fetched by everyone who opens `abstracts.html`.
+
+Set a budget alert on the project. The failure mode worth guarding against is
+someone using the bucket as free hosting, which `storage.rules` limits by
+capping size and content type and keying every object on the uploader's uid.
 
 ### 3.3 No build step
 

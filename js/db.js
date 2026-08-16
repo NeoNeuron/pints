@@ -1,5 +1,4 @@
 import {
-  addDoc,
   collection,
   deleteDoc,
   doc,
@@ -23,35 +22,29 @@ export async function getProfile(uid) {
 }
 
 /**
- * Save the profile and reconcile the public projection in a single batch.
+ * Save the profile and its public projection in a single batch.
  *
  * Firestore rules cannot expose only some fields of users/{uid} — a read is
  * all-or-nothing — so the public name list is a separate collection written
- * here. The presence of participants_public/{uid} is the consent record.
+ * here. Registering IS the consent: there is no opt-out any more, so this
+ * always writes participants_public/{uid} rather than reconciling a checkbox.
  */
-export async function saveProfile(uid, { email, displayName, affiliation, showPublicly }) {
+export async function saveProfile(uid, { email, displayName, affiliation }) {
   const batch = writeBatch(db);
   const clean = {
     email,
     displayName: displayName.trim(),
     affiliation: (affiliation ?? "").trim(),
-    showPublicly: Boolean(showPublicly),
     edition: CURRENT_EDITION,
     updatedAt: serverTimestamp(),
   };
   batch.set(doc(db, "users", uid), clean, { merge: true });
-
-  const publicRef = doc(db, "participants_public", uid);
-  if (showPublicly) {
-    batch.set(publicRef, {
-      displayName: clean.displayName,
-      affiliation: clean.affiliation,
-      edition: CURRENT_EDITION,
-      updatedAt: serverTimestamp(),
-    });
-  } else {
-    batch.delete(publicRef);
-  }
+  batch.set(doc(db, "participants_public", uid), {
+    displayName: clean.displayName,
+    affiliation: clean.affiliation,
+    edition: CURRENT_EDITION,
+    updatedAt: serverTimestamp(),
+  });
   await batch.commit();
 }
 
@@ -68,35 +61,57 @@ export async function getSiteConfig() {
 
 // ---------------------------------------------------------------- abstracts
 
-export async function getMyAbstract(uid) {
-  const snap = await getDoc(doc(db, "abstracts", uid));
-  return snap.exists() ? snapData(snap) : null;
+/**
+ * A participant may submit as many abstracts as they like, so the document id
+ * is an auto-id and ownership lives in the ownerUid field.
+ *
+ * The `edition` filter is applied client-side on purpose: `ownerUid` alone is a
+ * single-equality query served by the automatic index, and firestore.rules
+ * grants `list` only when the query filters on ownerUid.
+ */
+export async function listMyAbstracts(uid) {
+  const q = query(collection(db, "abstracts"), where("ownerUid", "==", uid));
+  return (await getDocs(q)).docs
+    .map(snapData)
+    .filter((a) => a.edition === CURRENT_EDITION);
 }
 
 /**
- * Create or replace the participant's single abstract.
+ * Mint the id before the document exists, so a figure can be uploaded to a
+ * stable Storage path during a first submission and create/update stay the
+ * same single setDoc call.
+ */
+export const newAbstractId = () => doc(collection(db, "abstracts")).id;
+
+/**
+ * Create or replace one abstract.
  *
  * setDoc without merge is deliberate: the rules validate the whole document on
  * every write, so a full replace is simpler than reasoning about partial
  * updates. Resubmitting after a rejection resets status to "submitted", which
  * the rules permit for any status except "accepted".
  */
-export async function saveAbstract(uid, { title, affiliations, authors, body, type }) {
-  await setDoc(doc(db, "abstracts", uid), {
+export async function saveAbstract(
+  id, uid, { title, affiliations, authors, body, topic, talkConsidered, figureUrl, figurePath },
+) {
+  await setDoc(doc(db, "abstracts", id), {
     ownerUid: uid,
     edition: CURRENT_EDITION,
     title: title.trim(),
     affiliations,
     authors,
     body: body.trim(),
-    type,
+    topic,
+    talkConsidered: Boolean(talkConsidered),
+    figureUrl: figureUrl ?? null,
+    figurePath: figurePath ?? null,
     status: "submitted",
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   });
 }
 
-export const withdrawAbstract = (uid) => deleteDoc(doc(db, "abstracts", uid));
+export const deleteAbstract = (id) => deleteDoc(doc(db, "abstracts", id));
 
 export async function listAbstracts() {
   const q = query(collection(db, "abstracts"), where("edition", "==", CURRENT_EDITION));
@@ -108,33 +123,40 @@ export async function listPublicAbstracts() {
   return (await getDocs(q)).docs.map(snapData);
 }
 
-export async function getReview(uid) {
-  const snap = await getDoc(doc(db, "abstract_reviews", uid));
+export async function getReview(id) {
+  const snap = await getDoc(doc(db, "abstract_reviews", id));
   return snap.exists() ? snap.data() : null;
 }
 
-export async function saveReview(uid, { note, decidedBy }) {
-  await setDoc(doc(db, "abstract_reviews", uid), {
+export async function saveReview(id, { note, decidedBy }) {
+  await setDoc(doc(db, "abstract_reviews", id), {
     note: note ?? "",
     decidedBy,
     decidedAt: serverTimestamp(),
   }, { merge: true });
 }
 
-export const setAbstractStatus = (uid, status) =>
-  updateDoc(doc(db, "abstracts", uid), { status, updatedAt: serverTimestamp() });
+export const setAbstractStatus = (id, status) =>
+  updateDoc(doc(db, "abstracts", id), { status, updatedAt: serverTimestamp() });
 
-/** Accept: flip the private status and write the public projection together. */
-export async function publishAbstract(uid, abstract, posterNumber) {
+/**
+ * Accept: flip the private status and write the public projection together.
+ *
+ * `type` is the organizers' decision, not the submitter's — everything is
+ * submitted as a poster and the committee promotes some of them to talks.
+ */
+export async function publishAbstract(id, abstract, { type, posterNumber }) {
   const batch = writeBatch(db);
-  batch.update(doc(db, "abstracts", uid), { status: "accepted", updatedAt: serverTimestamp() });
-  batch.set(doc(db, "abstracts_public", uid), {
+  batch.update(doc(db, "abstracts", id), { status: "accepted", updatedAt: serverTimestamp() });
+  batch.set(doc(db, "abstracts_public", id), {
     title: abstract.title,
     affiliations: abstract.affiliations ?? [],
     authors: abstract.authors ?? [],
     body: abstract.body,
-    type: abstract.type,
-    posterNumber: abstract.type === "poster" ? posterNumber : null,
+    topic: abstract.topic ?? null,
+    figureUrl: abstract.figureUrl ?? null,
+    type,
+    posterNumber: type === "poster" ? posterNumber : null,
     edition: CURRENT_EDITION,
     acceptedAt: serverTimestamp(),
   });
@@ -142,10 +164,10 @@ export async function publishAbstract(uid, abstract, posterNumber) {
 }
 
 /** Withdraw a published abstract: remove the public copy and mark it withdrawn. */
-export async function unpublishAbstract(uid) {
+export async function unpublishAbstract(id) {
   const batch = writeBatch(db);
-  batch.update(doc(db, "abstracts", uid), { status: "withdrawn", updatedAt: serverTimestamp() });
-  batch.delete(doc(db, "abstracts_public", uid));
+  batch.update(doc(db, "abstracts", id), { status: "withdrawn", updatedAt: serverTimestamp() });
+  batch.delete(doc(db, "abstracts_public", id));
   await batch.commit();
 }
 
@@ -153,6 +175,28 @@ export async function listUsers() {
   const q = query(collection(db, "users"), where("edition", "==", CURRENT_EDITION));
   return (await getDocs(q)).docs.map(snapData);
 }
+
+// -------------------------------------------------------------------- pages
+
+/**
+ * Editable page copy. Not edition-scoped: the venue and about text carry from
+ * one year to the next, and an organizer who edits a page means to edit the
+ * page, not this year's copy of it.
+ */
+export async function getPage(slug) {
+  const snap = await getDoc(doc(db, "pages", slug));
+  return snap.exists() ? snap.data() : null;
+}
+
+export const savePage = (slug, markdown, adminUid) =>
+  setDoc(doc(db, "pages", slug), {
+    markdown,
+    updatedAt: serverTimestamp(),
+    updatedBy: adminUid,
+  });
+
+/** Revert to the copy committed in the repo, which is the fallback when no doc exists. */
+export const deletePage = (slug) => deleteDoc(doc(db, "pages", slug));
 
 // ----------------------------------------------------------------- schedule
 
@@ -164,11 +208,8 @@ export async function listSchedule() {
 /** `id` null creates; otherwise replaces. Resolves to the document id. */
 export async function saveScheduleItem(id, data) {
   const payload = { ...data, edition: CURRENT_EDITION };
-  if (id) {
-    await setDoc(doc(db, "schedule", id), payload);
-    return id;
-  }
-  const ref = await addDoc(collection(db, "schedule"), payload);
+  const ref = doc(db, "schedule", id ?? doc(collection(db, "schedule")).id);
+  await setDoc(ref, payload);
   return ref.id;
 }
 
@@ -176,9 +217,17 @@ export const deleteScheduleItem = (id) => deleteDoc(doc(db, "schedule", id));
 
 // ----------------------------------------------------------------- settings
 
-export const saveSiteConfig = ({ submissionsOpen, submissionDeadline }) =>
-  setDoc(doc(db, "config", "site"),
-    { submissionsOpen, submissionDeadline, edition: CURRENT_EDITION }, { merge: true });
+/**
+ * Partial update of config/site. Undefined keys are stripped, because the
+ * settings tab saves the meeting date and the submission window independently
+ * and Firestore rejects an undefined field value outright.
+ */
+export function saveSiteConfig(patch) {
+  const clean = Object.fromEntries(
+    Object.entries(patch).filter(([, value]) => value !== undefined));
+  return setDoc(doc(db, "config", "site"),
+    { ...clean, edition: CURRENT_EDITION }, { merge: true });
+}
 
 export const addAdmin = (uid, email, addedBy) =>
   setDoc(doc(db, "admins", uid), { email, addedBy, addedAt: serverTimestamp() });

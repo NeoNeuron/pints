@@ -3,24 +3,20 @@ import { warnIfUnconfigured } from "./firebase.js";
 import { onUser } from "./auth.js";
 import { listPublicAbstracts } from "./db.js";
 import { authorLineParts, filterAbstracts, sortPublicAbstracts } from "./abstract-utils.mjs";
-import { renderAbstractHtml, renderPageHtml } from "./markdown.js";
+import { ABSTRACT_TOPICS, TOPIC_LABELS } from "./config.mjs";
+import { renderAbstractHtml } from "./markdown.js";
+import { hydrateMarkdownHosts } from "./content-hydrate.js";
 
 mountLayout();
 onUser(({ user, isAdmin }) => setAuthLink({ signedIn: Boolean(user), isAdmin }));
 
-for (const host of document.querySelectorAll("[data-markdown]")) {
-  try {
-    const res = await fetch(host.getAttribute("data-markdown"), { cache: "no-cache" });
-    if (res.ok) host.innerHTML = renderPageHtml(await res.text());
-  } catch (err) {
-    console.error("[pints] poster guidelines", err);
-  }
-}
+await hydrateMarkdownHosts();
 
 const listEl = document.getElementById("list");
 const countEl = document.getElementById("count");
 const msg = document.getElementById("msg");
 const queryEl = document.getElementById("q");
+const topicEl = document.getElementById("topic");
 
 function card(abstract) {
   const article = document.createElement("article");
@@ -63,16 +59,47 @@ function card(abstract) {
   // The only innerHTML here, and only through the tight untrusted allowlist.
   body.innerHTML = renderAbstractHtml(abstract.body);
 
-  article.append(h3, byline, affil, body);
+  const meta = document.createElement("p");
+  if (abstract.topic) {
+    const pill = document.createElement("span");
+    pill.className = "pill";
+    pill.textContent = TOPIC_LABELS[abstract.topic] ?? abstract.topic;
+    meta.append(pill);
+  }
+
+  // Built with createElement, never through the markdown renderer:
+  // ABSTRACT_ALLOWLIST forbids <img> in a submitted body and must keep doing so.
+  const figure = document.createElement("p");
+  if (abstract.figureUrl) {
+    const img = document.createElement("img");
+    img.src = abstract.figureUrl;
+    img.alt = `Figure for “${abstract.title ?? "this abstract"}”`;
+    img.loading = "lazy";
+    figure.append(img);
+  }
+
+  article.append(h3, meta, byline, affil, body, figure);
   return article;
 }
 
 let all = [];
 
 function draw() {
-  const shown = filterAbstracts(all, queryEl.value);
+  const byTopic = topicEl.value ? all.filter((a) => a.topic === topicEl.value) : all;
+  const shown = filterAbstracts(byTopic, queryEl.value);
   countEl.textContent = `${shown.length} of ${all.length} shown.`;
   listEl.replaceChildren(...shown.map(card));
+}
+
+const anyTopic = document.createElement("option");
+anyTopic.value = "";
+anyTopic.textContent = "All topics";
+topicEl.append(anyTopic);
+for (const topic of ABSTRACT_TOPICS) {
+  const option = document.createElement("option");
+  option.value = topic;
+  option.textContent = TOPIC_LABELS[topic] ?? topic;
+  topicEl.append(option);
 }
 
 if (!warnIfUnconfigured(msg)) {
@@ -84,6 +111,7 @@ if (!warnIfUnconfigured(msg)) {
     }
     draw();
     queryEl.addEventListener("input", draw);
+    topicEl.addEventListener("change", draw);
   } catch (err) {
     msg.className = "msg err";
     msg.textContent = "Could not load the abstract list.";

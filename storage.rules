@@ -1,0 +1,34 @@
+rules_version = '2';
+
+// Figures attached to abstracts. This is the only thing in the bucket.
+//
+// Storage rules cannot read Firestore, so ownership has to be encoded in the
+// object path — hence abstract_figures/{uid}/{abstractId}, not a flat namespace
+// keyed by abstract id alone. js/figure-utils.mjs figurePath() is the single
+// place that builds it.
+
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    match /abstract_figures/{uid}/{fileName} {
+      // Accepted figures are shown on the public abstract list, and the rules
+      // cannot tell an accepted abstract from a pending one. Read is public.
+      allow read: if true;
+
+      // Mirrors js/figure-utils.mjs validateFigure(). The client downscales
+      // first, so a legitimate upload lands far under this ceiling; the limit is
+      // here to stop someone using the bucket as free hosting.
+      allow write: if request.auth != null
+        && request.auth.uid == uid
+        && request.resource.size < 5 * 1024 * 1024
+        && request.resource.contentType.matches('image/(png|jpeg|webp)');
+
+      allow delete: if request.auth != null && request.auth.uid == uid;
+    }
+
+    // Anything not matched above is denied.
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}
