@@ -1,6 +1,7 @@
-import { LIMITS, PAGES } from "./config.mjs";
+import { LIMITS, PAGES, REPO } from "./config.mjs";
 import { renderPageHtml } from "./markdown.js";
 import { deletePage, getPage, savePage } from "./db.js";
+import { commitPage, forgetToken, getToken, setToken } from "./github.js";
 
 /**
  * Edit page copy from the site instead of committing to GitHub.
@@ -29,8 +30,29 @@ export async function mountPagesTab(host, { adminUid }) {
 
     <div class="actions">
       <button type="button" id="pg-save">Save and publish</button>
+      <button type="button" id="pg-repo" class="secondary">Update in the repo</button>
       <button type="button" id="pg-revert" class="danger">Revert to the version in the repo</button>
-    </div>`;
+    </div>
+
+    <details id="pg-token-box">
+      <summary>GitHub token for "Update in the repo"</summary>
+      <p class="muted">Saving publishes to the website immediately; this button is
+        separate, and writes the same markdown back to
+        <code>${REPO.owner}/${REPO.name}</code> on <code>${REPO.branch}</code> so the
+        git history and the fallback copy stay in step.</p>
+      <p class="muted">It needs a <strong>fine-grained personal access token</strong> with
+        <strong>Contents: Read and write</strong> on this repository and nothing else.
+        The token is kept in this tab only, is forgotten when you close it, and is
+        never stored in the repository. Anyone who can read this browser profile
+        while the tab is open can read the token, so use a short expiry.</p>
+      <label for="pg-token">Token</label>
+      <input id="pg-token" type="password" autocomplete="off" spellcheck="false"
+        placeholder="github_pat_...">
+      <div class="actions">
+        <button type="button" id="pg-token-save" class="secondary">Remember for this tab</button>
+        <button type="button" id="pg-token-forget" class="secondary">Forget token</button>
+      </div>
+    </details>`;
 
   const msg = host.querySelector("#pg-msg");
   const select = host.querySelector("#pg-select");
@@ -39,7 +61,10 @@ export async function mountPagesTab(host, { adminUid }) {
   const preview = host.querySelector("#pg-preview");
   const count = host.querySelector("#pg-count");
   const saveBtn = host.querySelector("#pg-save");
+  const repoBtn = host.querySelector("#pg-repo");
   const revertBtn = host.querySelector("#pg-revert");
+  const tokenBox = host.querySelector("#pg-token-box");
+  const tokenEl = host.querySelector("#pg-token");
 
   const say = (text_, kind = "ok") => {
     msg.className = `msg ${kind}`;
@@ -121,6 +146,57 @@ export async function mountPagesTab(host, { adminUid }) {
       console.error("[pints] deletePage", err);
     } finally {
       revertBtn.disabled = false;
+    }
+  });
+
+  // --------------------------------------------------------------- GitHub
+
+  tokenEl.value = getToken();
+
+  host.querySelector("#pg-token-save").addEventListener("click", () => {
+    if (!tokenEl.value.trim()) return say("Paste a token first.", "err");
+    setToken(tokenEl.value);
+    say("Token remembered for this tab only.", "ok");
+  });
+
+  host.querySelector("#pg-token-forget").addEventListener("click", () => {
+    forgetToken();
+    tokenEl.value = "";
+    say("Token forgotten.", "warn");
+  });
+
+  repoBtn.addEventListener("click", async () => {
+    const page = current();
+    const token = tokenEl.value.trim() || getToken();
+    if (!token) {
+      tokenBox.open = true;
+      return say("Add a GitHub token below before updating the repository.", "err");
+    }
+    if (!confirm(`Commit this text to ${page.file} on ${REPO.branch}?\n\n`
+      + `${REPO.branch} is the branch GitHub Pages serves, so this also redeploys the site.`)) {
+      return;
+    }
+    repoBtn.disabled = true;
+    try {
+      const commitUrl = await commitPage({
+        token, path: page.file, markdown: text.value, label: page.label,
+      });
+      msg.className = "msg ok";
+      msg.replaceChildren(document.createTextNode(`Committed to ${page.file}. `));
+      if (commitUrl) {
+        const link = document.createElement("a");
+        link.href = commitUrl;
+        link.target = "_blank";
+        link.rel = "noopener";
+        link.textContent = "View the commit";
+        msg.append(link);
+      }
+    } catch (err) {
+      // Deliberately not console.error(err) with the request in scope: the
+      // token must never reach the console or an error-reporting sink.
+      say(err?.message ?? "Could not update the repository.", "err");
+    } finally {
+      repoBtn.disabled = false;
     }
   });
 

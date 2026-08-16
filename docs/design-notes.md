@@ -93,6 +93,26 @@ Set a budget alert on the project. The failure mode worth guarding against is
 someone using the bucket as free hosting, which `storage.rules` limits by
 capping size and content type and keying every object on the uploader's uid.
 
+### 3.2b Writing back to GitHub needs a token in the browser
+
+The Pages tab can commit page copy back to `content/*.md`. With no server there
+is no way to hold a GitHub credential safely, so the organizer supplies a
+fine-grained token scoped to one repository, and it lives in `sessionStorage`
+for the life of the tab.
+
+This was considered and rejected during the original design, and the reasoning
+has not changed — it is a genuine trade-off, taken deliberately because the
+alternative (page copy drifting out of git entirely) was judged worse. Two
+things keep it bounded:
+
+- **The button is optional.** "Save and publish" writes Firestore and is what
+  the website actually reads. Nobody has to hold a token to run the site.
+- **The blast radius is one repository.** A fine-grained token with
+  `Contents: write` on `NeoNeuron/pints` cannot touch anything else.
+
+Never move the token to `localStorage`, never log it, and never accept it from
+anywhere but the organizer typing it in.
+
 ### 3.3 No build step
 
 Which means: all paths relative, dependencies vendored, no environment-variable

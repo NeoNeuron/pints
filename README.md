@@ -28,14 +28,15 @@ paid Firebase plan; the CSV export stands in for it.
   poster-vs-talk assignment, poster numbering, accept/reject/unpublish. Public
   list with search and a topic filter.
 - **Pages** — organizers edit page copy in the admin console; `content/*.md`
-  remains the fallback. See "Editing page content".
+  remains the fallback, and an optional button commits edits back to the
+  repository. See "Editing page content".
 - **Schedule** — admin editor for a single-day program, ordered by start time;
   public program page headed by the meeting date from Settings.
 - **Settings** — set the meeting date, open/close the submission window, set the
   deadline, grant admin rights. No Firebase-console workarounds remain for
   day-to-day organizing.
 
-71 security-rules tests and 67 unit tests cover this.
+71 security-rules tests and 78 unit tests cover this.
 
 ### Deploying rules — order matters
 
@@ -67,6 +68,32 @@ the committed file back in charge.
 Editing the `.md` file on GitHub still works, but **it has no effect on a page
 that has been edited through the admin console** — the Firestore copy wins. If
 you have been editing on the site, edit on the site.
+
+### Keeping the repository in step
+
+The Pages tab has a second button, **"Update in the repo"**, which commits the
+same markdown back to `content/*.md` on `main`. It is optional — the site does
+not need it — but it keeps the git history meaningful and stops the fallback
+copy from rotting. `main` is the branch GitHub Pages serves, so committing also
+redeploys; the button asks for confirmation first.
+
+Because this is a static site with no server, the commit is made from your
+browser with a token you supply:
+
+1. GitHub → **Settings → Developer settings → Personal access tokens →
+   Fine-grained tokens → Generate new token**.
+2. Repository access: **Only select repositories** → this repository.
+3. Permissions: **Contents → Read and write**. Nothing else.
+4. Give it a **short expiry**, then paste it into the "GitHub token" box on the
+   Pages tab.
+
+The token is held in `sessionStorage`, so it disappears when you close the tab,
+and "Forget token" clears it immediately. It is never committed and never
+logged. Understand the trade-off before using this: while the tab is open, the
+token sits in the browser profile, and anyone with access to that profile can
+read it. That is why the scope is one repository and the expiry should be days,
+not months. If you would rather not hold a token at all, skip this button —
+"Save and publish" is what actually updates the website.
 
 | File | Slug | Appears on |
 |---|---|---|

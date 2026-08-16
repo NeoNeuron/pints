@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   authorLineParts,
   filterAbstracts,
+  groupByTopic,
   nextPosterNumber,
   sortPublicAbstracts,
 } from "../js/abstract-utils.mjs";
@@ -77,4 +78,36 @@ test("sortPublicAbstracts does not mutate its input", () => {
   const input = [{ type: "poster", posterNumber: 2 }, { type: "talk" }];
   sortPublicAbstracts(input);
   assert.deepEqual(input.map((a) => a.type), ["poster", "talk"]);
+});
+
+test("groupByTopic orders groups as config declares them", () => {
+  const groups = groupByTopic(
+    [{ topic: "systems" }, { topic: "cognitive" }, { topic: "computational" }],
+    ["cognitive", "systems", "computational"],
+  );
+  assert.deepEqual(groups.map((g) => g.topic), ["cognitive", "systems", "computational"]);
+});
+
+test("groupByTopic drops empty topics but keeps every abstract", () => {
+  const groups = groupByTopic(
+    [{ id: 1, topic: "systems" }, { id: 2, topic: "systems" }],
+    ["cognitive", "systems", "computational"],
+  );
+  assert.deepEqual(groups.map((g) => g.topic), ["systems"]);
+  assert.deepEqual(groups[0].items.map((a) => a.id), [1, 2]);
+});
+
+// An abstract the reviewers cannot see is worse than an untidy heading.
+test("groupByTopic sweeps missing and unknown topics into a final bucket", () => {
+  const groups = groupByTopic(
+    [{ id: 1, topic: "systems" }, { id: 2 }, { id: 3, topic: "phrenology" }],
+    ["cognitive", "systems", "computational"],
+  );
+  assert.equal(groups.at(-1).topic, null);
+  assert.deepEqual(groups.at(-1).items.map((a) => a.id), [2, 3]);
+});
+
+test("groupByTopic handles an empty list and a nullish list", () => {
+  assert.deepEqual(groupByTopic([], ["cognitive"]), []);
+  assert.deepEqual(groupByTopic(undefined, ["cognitive"]), []);
 });

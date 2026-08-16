@@ -41,3 +41,23 @@ export function sortPublicAbstracts(list) {
     (a?.posterNumber ?? Number.MAX_SAFE_INTEGER) - (b?.posterNumber ?? Number.MAX_SAFE_INTEGER) ||
     collator.compare(String(a?.title ?? ""), String(b?.title ?? "")));
 }
+
+/**
+ * Group abstracts by topic for the review console, in the order topics are
+ * declared in config. Anything with an unrecognised or missing topic lands in a
+ * final "Other" bucket rather than vanishing — an abstract the reviewers cannot
+ * see is worse than an untidy heading. Empty topics are dropped.
+ */
+export function groupByTopic(list, topics) {
+  const buckets = new Map(topics.map((topic) => [topic, []]));
+  const other = [];
+  for (const abstract of list ?? []) {
+    const bucket = buckets.get(abstract?.topic);
+    (bucket ?? other).push(abstract);
+  }
+  const groups = [...buckets.entries()]
+    .filter(([, items]) => items.length)
+    .map(([topic, items]) => ({ topic, items }));
+  if (other.length) groups.push({ topic: null, items: other });
+  return groups;
+}

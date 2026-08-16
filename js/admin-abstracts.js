@@ -1,5 +1,5 @@
-import { ABSTRACT_TYPES, TOPIC_LABELS } from "./config.mjs";
-import { authorLineParts, nextPosterNumber } from "./abstract-utils.mjs";
+import { ABSTRACT_TOPICS, ABSTRACT_TYPES, TOPIC_LABELS } from "./config.mjs";
+import { authorLineParts, groupByTopic, nextPosterNumber } from "./abstract-utils.mjs";
 import { renderAbstractHtml } from "./markdown.js";
 import {
   getReview,
@@ -222,7 +222,16 @@ export async function mountAbstractsTab(host, { adminUid }) {
       `${abstracts.length} submitted · ${counts.accepted ?? 0} accepted · ` +
       `${counts.rejected ?? 0} rejected · ${counts.withdrawn ?? 0} withdrawn`;
 
-    listEl.replaceChildren(...abstracts.map((a) => card(a, published, submitters, render)));
+    // Grouped by topic: the committee reviews a topic at a time, and comparing
+    // submissions within a topic is the whole job.
+    listEl.replaceChildren();
+    for (const { topic, items } of groupByTopic(abstracts, ABSTRACT_TOPICS)) {
+      const heading = document.createElement("h3");
+      heading.textContent =
+        `${topic ? TOPIC_LABELS[topic] ?? topic : "Other"} (${items.length})`;
+      listEl.append(heading);
+      for (const a of items) listEl.append(card(a, published, submitters, render));
+    }
     if (!abstracts.length) say("No abstracts have been submitted yet.", "warn");
   }
 

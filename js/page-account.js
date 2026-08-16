@@ -79,7 +79,7 @@ if (warnIfUnconfigured(msg)) {
         displayName,
         affiliation: affEl.value,
       });
-      say("Saved. Your details are on the public participant list.", "ok");
+      say("Saved.", "ok");
     } catch (err) {
       say("Could not save your details. Please try again.", "err");
       console.error("[pints] saveProfile", err);
@@ -122,9 +122,8 @@ async function mountAbstracts({ user, verified, isAdmin, profile }) {
   const details = host.querySelector("#abs-new");
   const formHost = host.querySelector("#abs-new-host");
 
-  // Guards the toggle listener below: openForm() opens the disclosure itself
-  // when Edit is clicked, and that fires `toggle`, which would otherwise mount
-  // a second, blank form on top of the one being opened.
+  // Guards the toggle listener below: opening the disclosure programmatically
+  // fires `toggle`, which would otherwise mount a second, blank form.
   let mounting = false;
 
   const summaryEl = details.querySelector("summary");
@@ -137,15 +136,14 @@ async function mountAbstracts({ user, verified, isAdmin, profile }) {
       : "I would like to submit an abstract";
   };
 
-  const openForm = async (abstract) => {
+  /** Mount the blank "new abstract" form in the disclosure at the bottom. */
+  const openNewForm = async () => {
     mounting = true;
     details.open = true;
-    if (abstract) summaryEl.textContent = `Editing: ${abstract.title ?? "untitled abstract"}`;
     await mountAbstractForm(formHost, {
       user,
       verified,
       isAdmin,
-      abstract,
       defaultAuthorName: profile?.displayName ?? "",
       onSaved: async () => {
         details.open = false;
@@ -156,7 +154,59 @@ async function mountAbstracts({ user, verified, isAdmin, profile }) {
     mounting = false;
   };
 
-  function card(abstract) {
+  /**
+   * Editing happens in place.
+   *
+   * The editor is mounted into the row it belongs to and the summary card is
+   * hidden while it is open, so the form is never far from the abstract it is
+   * editing and the same abstract is never on screen twice. Sending edits to
+   * the disclosure at the bottom of the list meant scrolling past every other
+   * submission to reach them.
+   */
+  function row(abstract) {
+    const wrapper = document.createElement("div");
+    const summary = card(abstract, () => startEditing());
+    const editHost = document.createElement("div");
+    editHost.hidden = true;
+    wrapper.append(summary, editHost);
+
+    const stopEditing = () => {
+      editHost.replaceChildren();
+      editHost.hidden = true;
+      summary.hidden = false;
+    };
+
+    async function startEditing() {
+      summary.hidden = true;
+      editHost.hidden = false;
+
+      const cancel = document.createElement("button");
+      cancel.type = "button";
+      cancel.className = "secondary";
+      cancel.textContent = "Cancel";
+      cancel.addEventListener("click", stopEditing);
+
+      const formSlot = document.createElement("div");
+      editHost.replaceChildren(formSlot);
+
+      await mountAbstractForm(formSlot, {
+        user,
+        verified,
+        isAdmin,
+        abstract,
+        defaultAuthorName: profile?.displayName ?? "",
+        onSaved: async () => { await render(); },
+      });
+      // Appended after the mount, because mountAbstractForm replaces the
+      // contents of whatever host it is given.
+      formSlot.querySelector(".actions")?.append(cancel);
+      wrapper.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }
+
+    return wrapper;
+  }
+
+  function card(abstract, onEdit) {
     const article = document.createElement("article");
     article.className = "card";
 
@@ -183,7 +233,7 @@ async function mountAbstracts({ user, verified, isAdmin, profile }) {
     const edit = document.createElement("button");
     edit.className = "secondary";
     edit.textContent = abstract.status === "accepted" ? "View" : "Edit";
-    edit.addEventListener("click", () => openForm(abstract));
+    edit.addEventListener("click", onEdit);
     actions.append(edit);
 
     article.append(h3, meta, actions);
@@ -193,7 +243,7 @@ async function mountAbstracts({ user, verified, isAdmin, profile }) {
   async function render() {
     try {
       const mine = await listMyAbstracts(user.uid);
-      listEl.replaceChildren(...mine.map(card));
+      listEl.replaceChildren(...mine.map(row));
       listMsg.className = "msg";
       listMsg.textContent = "";
       setSummary(mine.length);
@@ -207,7 +257,7 @@ async function mountAbstracts({ user, verified, isAdmin, profile }) {
   // Mount the blank form only when the disclosure is first opened, so a visitor
   // who never submits does not pay for the form or its config read.
   details.addEventListener("toggle", async () => {
-    if (details.open && !mounting && !formHost.firstChild) await openForm(null);
+    if (details.open && !mounting && !formHost.firstChild) await openNewForm();
   });
 
   await render();
