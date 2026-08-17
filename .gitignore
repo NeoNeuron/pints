@@ -6,3 +6,4 @@ ui-debug.log
 .DS_Store
 *.swp
 .claude/
+functions/node_modules/

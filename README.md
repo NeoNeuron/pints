@@ -35,6 +35,9 @@ paid Firebase plan; the CSV export stands in for it.
 - **Settings** — set the meeting date, open/close the submission window, set the
   deadline, grant admin rights. No Firebase-console workarounds remain for
   day-to-day organizing.
+- **Organizer edit and delete** — organizers can edit any abstract at any status
+  (an accepted one has its public copy rewritten in the same batch) and delete
+  an abstract or a whole participant. See "Deleting things".
 
 71 security-rules tests and 78 unit tests cover this.
 
@@ -85,6 +88,47 @@ adding an entry there and a `data-page` attribute on the host element.
 Markdown supports headings, lists, links, tables, bold, and italic. It is
 sanitized before rendering, so raw HTML and scripts are stripped.
 
+## Deleting things
+
+Deletion is the one operation that does not run in the browser, because two
+things make it impossible there: a Firebase Auth account can only be deleted by
+its owner from a client, and `storage.rules` scopes figure deletion to the
+uploader. Both need the Admin SDK, so `functions/` holds two callables:
+
+| Callable | Removes |
+|---|---|
+| `deleteAbstractCompletely` | the abstract, its published copy, its reviewer note, its figure |
+| `deleteParticipant` | all of the above for every abstract they own, their profile, their public listing, and their login |
+
+`deleteParticipant` refuses to delete you, and refuses to delete another
+organizer — revoke their admin rights in Settings first.
+
+**The site works without them.** Every page loads and every other feature works
+if the functions are never deployed; the two delete buttons report that the
+service is missing when pressed. Deploy them with:
+
+```bash
+cd functions && npm install
+npx firebase deploy --only functions
+```
+
+They deploy to `europe-west1`, not the `us-central1` default, so participant
+names and email addresses stay in the EU. `js/functions.js` names the same
+region — **if you change one, change both**, or every call fails as an opaque
+CORS error.
+
+Cloud Functions need the Blaze plan. Nothing else on the site does.
+
+### What organizers cannot do
+
+Organizers cannot edit a participant's name or affiliation. Those are what
+somebody said about themselves; an organizer who thinks one is wrong should ask
+them. `firestore.rules` enforces this — `participants_public` is owner-write
+only — and there is a test asserting an admin cannot rewrite it.
+
+They also cannot replace a figure on somebody else's abstract, for the
+`storage.rules` reason above. Everything else on an abstract is editable.
+
 ## Local development
 
 ```bash
@@ -92,7 +136,8 @@ npm install
 npm run vendor      # refresh vendor/ after upgrading marked or dompurify
 npm run serve       # http://127.0.0.1:4173
 npm test            # pure-function unit tests
-npm run test:rules  # Firestore rules tests (Phase 1 onward; needs Java)
+npm run test:rules  # Firestore rules tests (needs Java)
+npm run emulators   # Firestore, Auth, Storage and Functions emulators
 ```
 
 `npm test` must pass before every commit.

@@ -123,11 +123,42 @@ deleting `pages/{slug}` in the Firebase console. If the write-back is ever
 wanted again, the shape to reach for is a server-side action (a GitHub Action on
 a Firestore trigger), not a token in a text box.
 
+### 3.2c Deletion is the one thing that cannot be done from the browser
+
+Everything else on this site is a static page talking straight to Firestore,
+with `firestore.rules` as the only authorization boundary. Deleting a
+participant broke that model twice over:
+
+- **A Firebase Auth account can only be deleted by its owner from a browser.**
+  Removing somebody else's login needs the Admin SDK, which needs a server.
+- **`storage.rules` cannot read Firestore**, so it has no `isAdmin()` to appeal
+  to and keys figure deletion to the uploader's uid. An organizer deleting an
+  abstract could not remove its figure.
+
+The alternative to a server was baking a list of admin uids into `storage.rules`
+and accepting that the login survives — rejected, because the uid list rots
+silently the moment the committee changes.
+
+So `functions/` exists, holding exactly two callables and nothing else. Keep it
+that way: the moment ordinary reads and writes start going through functions,
+the site stops being a static site and every page pays cold-start latency for
+work that rules already secure. The test for whether something belongs here is
+narrow — *does it need to bypass the rules?*
+
+Because the Admin SDK ignores rules, every callable checks the caller itself.
+`request.auth` on a callable is set by the platform from a verified ID token and
+is trustworthy; nothing else the client sends is.
+
 ### 3.3 No build step
 
 Which means: all paths relative, dependencies vendored, no environment-variable
 injection, no minification, no transpilation. See §4.3 for the two places this
 bites.
+
+This still holds for the **site**. It does not hold for `functions/`, which has
+its own `package.json`, its own `node_modules`, and a real deploy step. The two
+are independent: every page works with the functions never deployed, minus the
+two delete buttons, which say so when pressed.
 
 ### 3.4 The Firebase web API key is public, unavoidably
 

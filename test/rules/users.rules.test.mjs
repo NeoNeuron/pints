@@ -1,6 +1,6 @@
 import test, { after, before, beforeEach } from "node:test";
 import { assertFails, assertSucceeds } from "@firebase/rules-unit-testing";
-import { doc, getDoc, setDoc, updateDoc } from "firebase/firestore";
+import { deleteDoc, doc, getDoc, setDoc, updateDoc } from "firebase/firestore";
 import { asAnon, asUser, makeTestEnv, seed, seedAdmin } from "./helpers.mjs";
 
 let env;
@@ -98,4 +98,31 @@ test("an admin can add another admin", async () => {
   await assertSucceeds(setDoc(doc(asUser(env, "boss"), "admins", "alice"), {
     email: "alice@example.org", addedBy: "boss", addedAt: new Date(),
   }));
+});
+
+// ---------------------------------------------------- organizer deletes a user
+//
+// The console's "delete participant" rests on `allow write: if isAdmin()` over
+// users/{uid}. The Cloud Function uses the Admin SDK and bypasses rules, but the
+// rule is still the boundary for anything reaching Firestore from a browser.
+
+test("an admin can delete another participant's profile", async () => {
+  await seedAdmin(env, "olivia");
+  await seed(env, (fs) => setDoc(doc(fs, "users", "alice"), profile()));
+  await assertSucceeds(deleteDoc(doc(asUser(env, "olivia"), "users", "alice")));
+});
+
+test("an ordinary participant cannot delete somebody else's profile", async () => {
+  await seed(env, (fs) => setDoc(doc(fs, "users", "alice"), profile()));
+  await assertFails(deleteDoc(doc(asUser(env, "mallory"), "users", "alice")));
+});
+
+// Organizers may remove a participant, but must not be able to rewrite what
+// somebody said about themselves. There is no admin UI for it; this pins the
+// intent so nobody adds one by accident.
+test("an admin can read every profile, which an ordinary participant cannot", async () => {
+  await seedAdmin(env, "olivia");
+  await seed(env, (fs) => setDoc(doc(fs, "users", "alice"), profile()));
+  await assertSucceeds(getDoc(doc(asUser(env, "olivia"), "users", "alice")));
+  await assertFails(getDoc(doc(asUser(env, "mallory"), "users", "alice")));
 });

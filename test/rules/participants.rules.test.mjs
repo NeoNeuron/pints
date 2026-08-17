@@ -104,3 +104,21 @@ test("opting out clears the profile flag and deletes the public entry in one bat
   batch.delete(doc(fs, "participants_public", "alice"));
   await assertSucceeds(batch.commit());
 });
+
+// An organizer removing a participant has to take the public listing with them,
+// or the participant list keeps showing somebody who has been deleted.
+test("an admin can delete another participant's public listing", async () => {
+  await seedAdmin(env, "olivia");
+  await seed(env, (fs) => setDoc(doc(fs, "participants_public", "alice"), pub()));
+  await assertSucceeds(deleteDoc(doc(asUser(env, "olivia"), "participants_public", "alice")));
+});
+
+// Deliberately NOT permitted: an organizer must not be able to rewrite the name
+// or affiliation a participant chose for themselves.
+test("an admin cannot rewrite another participant's public listing", async () => {
+  await seedAdmin(env, "olivia");
+  await seed(env, (fs) => setDoc(doc(fs, "participants_public", "alice"), pub()));
+  await assertFails(setDoc(
+    doc(asUser(env, "olivia"), "participants_public", "alice"),
+    pub({ displayName: "Renamed by an organizer" })));
+});

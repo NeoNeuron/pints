@@ -42,7 +42,7 @@ if (!warnIfUnconfigured(guard)) {
       if (!mounted.has(name)) {
         mounted.add(name);
         const mount = await loaders[name]();
-        await mount(document.getElementById(`panel-${name}`), { adminUid: user.uid });
+        await mount(document.getElementById(`panel-${name}`), { adminUid: user.uid, user });
       }
     }
 

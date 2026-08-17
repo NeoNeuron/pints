@@ -1,0 +1,15 @@
+{
+  "name": "pints-functions",
+  "description": "Admin-only destructive operations for the PINTS site.",
+  "private": true,
+  "type": "module",
+  "main": "index.js",
+  "engines": { "node": "22" },
+  "scripts": {
+    "serve": "firebase emulators:start --only functions,firestore,auth,storage"
+  },
+  "dependencies": {
+    "firebase-admin": "^13.0.2",
+    "firebase-functions": "^6.1.1"
+  }
+}

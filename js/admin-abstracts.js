@@ -1,6 +1,10 @@
 import { ABSTRACT_TOPICS, ABSTRACT_TYPES, TOPIC_LABELS } from "./config.mjs";
 import { authorLineParts, groupByTopic, nextPosterNumber } from "./abstract-utils.mjs";
+import { abstractDeletionPlan, describeAbstractDeletion } from "./deletion-utils.mjs";
 import { renderAbstractHtml } from "./markdown.js";
+import { mountAbstractForm } from "./abstract-form.js";
+import { confirmChoice } from "./confirm-dialog.js";
+import { deleteAbstractCompletely } from "./functions.js";
 import {
   getReview,
   listAbstracts,
@@ -30,7 +34,7 @@ function authorsLine(abstract) {
   return span;
 }
 
-export async function mountAbstractsTab(host, { adminUid }) {
+export async function mountAbstractsTab(host, { adminUid, user }) {
   host.innerHTML = `
     <div id="adm-msg" class="msg" role="status" aria-live="polite"></div>
     <p id="adm-summary" class="muted"></p>
@@ -44,6 +48,11 @@ export async function mountAbstractsTab(host, { adminUid }) {
     msg.className = `msg ${kind}`;
     msg.textContent = text;
   };
+
+  // Which abstract is open in the editor. Like the account page, exactly one at
+  // a time: two editors on the same review screen means two drafts of the same
+  // pile, and a save from either silently discarding the other.
+  let editingId = null;
 
   function card(abstract, published, submitters, refresh) {
     const article = document.createElement("article");
@@ -153,7 +162,10 @@ export async function mountAbstractsTab(host, { adminUid }) {
           await fn();
           await refresh();
         } catch (err) {
-          say(`Could not ${label.toLowerCase()}.`, "err");
+          // The Cloud Function's refusals are written for a human — "revoke
+          // their admin rights first" — and are worth far more than a generic
+          // apology, so they are shown as-is.
+          say(err?.userFacing ? err.message : `Could not ${label.toLowerCase()}.`, "err");
           console.error("[pints] admin abstracts", err);
           button.disabled = false;
         }
@@ -195,8 +207,42 @@ export async function mountAbstractsTab(host, { adminUid }) {
     });
     pull.hidden = abstract.status !== "accepted";
 
-    actions.append(typeSelect, posterInput, accept, reject, saveNote, pull);
-    article.append(h3, byline, from, affil, meta, body, figure, noteLabel, note, actions);
+    const edit = document.createElement("button");
+    edit.className = "secondary";
+    edit.textContent = "Edit";
+    edit.addEventListener("click", () => openEditor(abstract, published, refresh));
+
+    const remove = guarded("Delete", "danger", async () => {
+      const plan = abstractDeletionPlan(abstract, published);
+      const choice = await confirmChoice({
+        title: "Delete abstract",
+        message: describeAbstractDeletion(abstract.title, plan),
+        choices: [
+          { value: "delete", label: "Delete permanently", className: "danger" },
+          { value: "cancel", label: "Cancel", className: "secondary" },
+        ],
+      });
+      if (choice !== "delete") return;
+      await deleteAbstractCompletely(abstract.id);
+      say(`Deleted “${abstract.title}”.`, "warn");
+    });
+
+    actions.append(typeSelect, posterInput, accept, reject, saveNote, edit, pull, remove);
+
+    // The editor is mounted into the card it belongs to, in the same panel the
+    // account page uses, so the form is never far from the abstract it edits.
+    const editHost = document.createElement("div");
+    editHost.className = "panel";
+    editHost.hidden = true;
+
+    article.append(h3, byline, from, affil, meta, body, figure, noteLabel, note, actions, editHost);
+    if (editingId === abstract.id) {
+      mountEditor(abstract, published, refresh, editHost)
+        .catch((err) => {
+          say("Could not open the editor.", "err");
+          console.error("[pints] admin edit", err);
+        });
+    }
 
     // Reviewer notes live in a separate collection because rules cannot hide a
     // field from a document's owner. Fetched after render so one failure does
@@ -206,6 +252,66 @@ export async function mountAbstractsTab(host, { adminUid }) {
       .catch((err) => console.error("[pints] getReview", err));
 
     return article;
+  }
+
+  /**
+   * Open the editor for one abstract, closing any other.
+   *
+   * Unlike the account page this does not arbitrate over unsaved work: the
+   * review screen re-renders on every decision, and an organizer who has not
+   * pressed "Save changes" has not changed anything. Opening a second editor
+   * simply closes the first.
+   */
+  function openEditor(abstract, published, refresh) {
+    editingId = editingId === abstract.id ? null : abstract.id;
+    refresh();
+  }
+
+  async function mountEditor(abstract, published, refresh, editHost) {
+    editHost.hidden = false;
+
+    const head = document.createElement("div");
+    head.className = "panel-head";
+    head.textContent = `Editing “${abstract.title ?? "(untitled)"}”`;
+    const slot = document.createElement("div");
+    slot.className = "panel-body";
+    editHost.replaceChildren(head, slot);
+
+    // An accepted abstract's public copy is rewritten in the same batch as the
+    // private one, so the type and board number have to survive the edit.
+    const live = published.find((p) => p.id === abstract.id);
+
+    await mountAbstractForm(slot, {
+      user,
+      verified: true,
+      isAdmin: true,
+      abstract,
+      republish: live
+        ? { type: live.type, posterNumber: live.posterNumber, acceptedAt: live.acceptedAt }
+        : null,
+      onCancel: () => { editingId = null; refresh(); },
+      onDelete: async () => {
+        const plan = abstractDeletionPlan(abstract, published);
+        const choice = await confirmChoice({
+          title: "Delete abstract",
+          message: describeAbstractDeletion(abstract.title, plan),
+          choices: [
+            { value: "delete", label: "Delete permanently", className: "danger" },
+            { value: "cancel", label: "Cancel", className: "secondary" },
+          ],
+        });
+        if (choice !== "delete") return;
+        try {
+          await deleteAbstractCompletely(abstract.id);
+          editingId = null;
+          say(`Deleted “${abstract.title}”.`, "warn");
+          await refresh();
+        } catch (err) {
+          say(err.message, "err");
+        }
+      },
+      onSaved: async () => { editingId = null; await refresh(); },
+    });
   }
 
   async function render() {

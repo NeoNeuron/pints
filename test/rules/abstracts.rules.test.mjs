@@ -230,3 +230,69 @@ test("a missing config/site denies submission rather than allowing it", async ()
   // error, and an erroring rule must fail closed.
   await assertFails(setDoc(doc(asUser(env, "alice"), "abstracts", "a1"), abstract()));
 });
+
+// ------------------------------------------------- organizer edit and delete
+//
+// The admin console's edit and delete buttons rest entirely on
+// `allow write: if isAdmin()`. Nothing else asserts it, so a later tightening of
+// these rules would break the console silently.
+
+test("an admin can edit an abstract they do not own", async () => {
+  await seedAdmin(env, "olivia");
+  await seed(env, (fs) => setDoc(doc(fs, "abstracts", "a1"), abstract()));
+  await assertSucceeds(setDoc(
+    doc(asUser(env, "olivia"), "abstracts", "a1"),
+    abstract({ title: "Recurrent dynamics in mouse V1 (corrected)" }),
+  ));
+});
+
+// The freeze exists to stop abstracts_public going stale. Admins are exempt
+// because the console rewrites the public copy in the same batch.
+test("an admin can edit an accepted abstract, which its owner cannot", async () => {
+  await seedConfig(env);
+  await seedAdmin(env, "olivia");
+  await seed(env, (fs) => setDoc(doc(fs, "abstracts", "a1"), abstract({ status: "accepted" })));
+
+  await assertFails(setDoc(
+    doc(asUser(env, "alice"), "abstracts", "a1"), abstract({ title: "Sneaky rewrite" })));
+  await assertSucceeds(setDoc(
+    doc(asUser(env, "olivia"), "abstracts", "a1"),
+    abstract({ status: "accepted", title: "Fixed by an organizer" })));
+});
+
+// The submission window gates participants, never organizers: a typo found the
+// week before the meeting still has to be fixable.
+test("an admin can edit an abstract after the deadline has passed", async () => {
+  await seedConfig(env, { open: false, deadline: PAST });
+  await seedAdmin(env, "olivia");
+  await seed(env, (fs) => setDoc(doc(fs, "abstracts", "a1"), abstract()));
+  await assertSucceeds(setDoc(
+    doc(asUser(env, "olivia"), "abstracts", "a1"), abstract({ title: "Late fix" })));
+});
+
+test("an admin can delete any abstract, including an accepted one", async () => {
+  await seedAdmin(env, "olivia");
+  await seed(env, (fs) => {
+    setDoc(doc(fs, "abstracts", "a1"), abstract());
+    return setDoc(doc(fs, "abstracts", "a2"), abstract({ status: "accepted" }));
+  });
+  const fs = asUser(env, "olivia");
+  await assertSucceeds(deleteDoc(doc(fs, "abstracts", "a1")));
+  await assertSucceeds(deleteDoc(doc(fs, "abstracts", "a2")));
+});
+
+test("an ordinary participant cannot delete someone else's abstract", async () => {
+  await seed(env, (fs) => setDoc(doc(fs, "abstracts", "a1"), abstract()));
+  await assertFails(deleteDoc(doc(asUser(env, "mallory"), "abstracts", "a1")));
+});
+
+test("an admin can delete the published copy and the reviewer note", async () => {
+  await seedAdmin(env, "olivia");
+  await seed(env, (fs) => {
+    setDoc(doc(fs, "abstracts_public", "a1"), { title: "Published", edition: "pints2026" });
+    return setDoc(doc(fs, "abstract_reviews", "a1"), { note: "strong", decidedBy: "olivia" });
+  });
+  const fs = asUser(env, "olivia");
+  await assertSucceeds(deleteDoc(doc(fs, "abstracts_public", "a1")));
+  await assertSucceeds(deleteDoc(doc(fs, "abstract_reviews", "a1")));
+});

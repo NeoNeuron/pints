@@ -90,12 +90,26 @@ export const newAbstractId = () => doc(collection(db, "abstracts")).id;
  * every write, so a full replace is simpler than reasoning about partial
  * updates. Resubmitting after a rejection resets status to "submitted", which
  * the rules permit for any status except "accepted".
+ *
+ * `ownerUid` is the SUBMITTER, never necessarily the person saving: an organizer
+ * fixing a typo in somebody else's abstract must not take it over. `status`
+ * likewise has to be carried through, or that same typo fix would quietly
+ * un-accept an accepted abstract. Both used to be implicit and both were wrong
+ * the moment the admin console gained an edit button.
+ *
+ * When an organizer edits an already-accepted abstract, `republish` carries the
+ * public projection's `type` and `posterNumber` so the two are rewritten in one
+ * batch. Without it abstracts_public would keep serving the old text, which is
+ * exactly the staleness the acceptance freeze exists to prevent.
  */
 export async function saveAbstract(
-  id, uid, { title, affiliations, authors, body, topic, talkConsidered, figureUrl, figurePath },
+  id,
+  ownerUid,
+  { title, affiliations, authors, body, topic, talkConsidered, figureUrl, figurePath },
+  { status = "submitted", createdAt = null, republish = null } = {},
 ) {
-  await setDoc(doc(db, "abstracts", id), {
-    ownerUid: uid,
+  const record = {
+    ownerUid,
     edition: CURRENT_EDITION,
     title: title.trim(),
     affiliations,
@@ -105,10 +119,39 @@ export async function saveAbstract(
     talkConsidered: Boolean(talkConsidered),
     figureUrl: figureUrl ?? null,
     figurePath: figurePath ?? null,
-    status: "submitted",
-    createdAt: serverTimestamp(),
+    status,
+    // Preserved rather than reset: an abstract submitted in September did not
+    // become a new submission because somebody fixed its title in November.
+    createdAt: createdAt ?? serverTimestamp(),
     updatedAt: serverTimestamp(),
+  };
+
+  if (!republish) {
+    await setDoc(doc(db, "abstracts", id), record);
+    return;
+  }
+
+  const batch = writeBatch(db);
+  batch.set(doc(db, "abstracts", id), record);
+  batch.set(doc(db, "abstracts_public", id), {
+    title: record.title,
+    affiliations: record.affiliations ?? [],
+    authors: record.authors ?? [],
+    body: record.body,
+    topic: record.topic ?? null,
+    figureUrl: record.figureUrl,
+    type: republish.type,
+    posterNumber: republish.type === "poster" ? republish.posterNumber : null,
+    edition: CURRENT_EDITION,
+    acceptedAt: republish.acceptedAt ?? serverTimestamp(),
   });
+  await batch.commit();
+}
+
+/** One abstract by id, for the admin console's edit form. */
+export async function getAbstract(id) {
+  const snap = await getDoc(doc(db, "abstracts", id));
+  return snap.exists() ? snapData(snap) : null;
 }
 
 export const deleteAbstract = (id) => deleteDoc(doc(db, "abstracts", id));
