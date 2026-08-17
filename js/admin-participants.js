@@ -1,4 +1,4 @@
-import { listAbstracts, listPublicAbstracts, listUsers } from "./db.js";
+import { listAbstracts, listAdminUids, listPublicAbstracts, listUsers } from "./db.js";
 import { sortParticipants } from "./participant-utils.mjs";
 import { describeParticipantDeletion, participantDeletionPlan } from "./deletion-utils.mjs";
 import { confirmChoice } from "./confirm-dialog.js";
@@ -53,8 +53,8 @@ export async function mountParticipantsTab(host, { adminUid } = {}) {
   async function render() {
     // Abstracts are loaded so the confirmation can say what else goes with the
     // participant. The list is small and this tab is opened rarely.
-    const [users, abstracts, published] = await Promise.all([
-      listUsers(), listAbstracts(), listPublicAbstracts(),
+    const [users, abstracts, published, adminUids] = await Promise.all([
+      listUsers(), listAbstracts(), listPublicAbstracts(), listAdminUids(),
     ]);
     const sorted = sortParticipants(users);
     host.querySelector("#p-summary").textContent = `${sorted.length} registered`;
@@ -68,7 +68,7 @@ export async function mountParticipantsTab(host, { adminUid } = {}) {
         td.textContent = value ?? "";
         tr.append(td);
       }
-      tr.append(actionCell(user, abstracts, published));
+      tr.append(actionCell(user, abstracts, published, adminUids));
       rows.append(tr);
     }
 
@@ -78,16 +78,25 @@ export async function mountParticipantsTab(host, { adminUid } = {}) {
     if (!sorted.length) say("Nobody has registered yet.", "warn");
   }
 
-  function actionCell(user, abstracts, published) {
+  function actionCell(user, abstracts, published, adminUids) {
     const td = document.createElement("td");
 
-    // Deleting yourself would sign you out of the console you are standing in.
-    // The server refuses it too; this is just not offering it.
-    if (user.id === adminUid) {
-      const you = document.createElement("span");
-      you.className = "muted";
-      you.textContent = "you";
-      td.append(you);
+    // Organizers are not deletable from here, and neither are you. Both are
+    // refused server-side as well; this is about not offering an action that is
+    // going to be rejected, and about making one mis-click unable to decapitate
+    // the committee. To remove an organizer, revoke their rights in Settings
+    // first — which is a second, deliberate step.
+    const label = user.id === adminUid ? "you"
+      : adminUids.has(user.id) ? "organizer"
+      : null;
+    if (label) {
+      const note = document.createElement("span");
+      note.className = "muted";
+      note.textContent = label;
+      note.title = label === "you"
+        ? "You cannot delete your own account from the admin console."
+        : "Revoke their organizer rights in Settings before deleting them.";
+      td.append(note);
       return td;
     }
 

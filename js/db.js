@@ -91,24 +91,16 @@ export const newAbstractId = () => doc(collection(db, "abstracts")).id;
  * updates. Resubmitting after a rejection resets status to "submitted", which
  * the rules permit for any status except "accepted".
  *
- * `ownerUid` is the SUBMITTER, never necessarily the person saving: an organizer
- * fixing a typo in somebody else's abstract must not take it over. `status`
- * likewise has to be carried through, or that same typo fix would quietly
- * un-accept an accepted abstract. Both used to be implicit and both were wrong
- * the moment the admin console gained an edit button.
- *
- * When an organizer edits an already-accepted abstract, `republish` carries the
- * public projection's `type` and `posterNumber` so the two are rewritten in one
- * batch. Without it abstracts_public would keep serving the old text, which is
- * exactly the staleness the acceptance freeze exists to prevent.
+ * `ownerUid` is the SUBMITTER, passed explicitly rather than taken from whoever
+ * is signed in, so a save can never silently reassign ownership.
  */
 export async function saveAbstract(
   id,
   ownerUid,
   { title, affiliations, authors, body, topic, talkConsidered, figureUrl, figurePath },
-  { status = "submitted", createdAt = null, republish = null } = {},
+  { createdAt = null } = {},
 ) {
-  const record = {
+  await setDoc(doc(db, "abstracts", id), {
     ownerUid,
     edition: CURRENT_EDITION,
     title: title.trim(),
@@ -119,39 +111,12 @@ export async function saveAbstract(
     talkConsidered: Boolean(talkConsidered),
     figureUrl: figureUrl ?? null,
     figurePath: figurePath ?? null,
-    status,
-    // Preserved rather than reset: an abstract submitted in September did not
-    // become a new submission because somebody fixed its title in November.
+    status: "submitted",
+    // Preserved rather than reset: revising a rejected abstract in November did
+    // not make it a submission from November.
     createdAt: createdAt ?? serverTimestamp(),
     updatedAt: serverTimestamp(),
-  };
-
-  if (!republish) {
-    await setDoc(doc(db, "abstracts", id), record);
-    return;
-  }
-
-  const batch = writeBatch(db);
-  batch.set(doc(db, "abstracts", id), record);
-  batch.set(doc(db, "abstracts_public", id), {
-    title: record.title,
-    affiliations: record.affiliations ?? [],
-    authors: record.authors ?? [],
-    body: record.body,
-    topic: record.topic ?? null,
-    figureUrl: record.figureUrl,
-    type: republish.type,
-    posterNumber: republish.type === "poster" ? republish.posterNumber : null,
-    edition: CURRENT_EDITION,
-    acceptedAt: republish.acceptedAt ?? serverTimestamp(),
   });
-  await batch.commit();
-}
-
-/** One abstract by id, for the admin console's edit form. */
-export async function getAbstract(id) {
-  const snap = await getDoc(doc(db, "abstracts", id));
-  return snap.exists() ? snapData(snap) : null;
 }
 
 export const deleteAbstract = (id) => deleteDoc(doc(db, "abstracts", id));
@@ -271,3 +236,15 @@ export function saveSiteConfig(patch) {
 
 export const addAdmin = (uid, email, addedBy) =>
   setDoc(doc(db, "admins", uid), { email, addedBy, addedAt: serverTimestamp() });
+
+/**
+ * The uids of every organizer. Admin-only, per the rules.
+ *
+ * The participants tab needs it to refuse to offer a delete button for an
+ * organizer. deleteParticipant refuses server-side too — this is so the console
+ * does not present an action that is going to be rejected.
+ */
+export async function listAdminUids() {
+  const snap = await getDocs(collection(db, "admins"));
+  return new Set(snap.docs.map((d) => d.id));
+}

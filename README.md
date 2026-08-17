@@ -35,9 +35,8 @@ paid Firebase plan; the CSV export stands in for it.
 - **Settings** — set the meeting date, open/close the submission window, set the
   deadline, grant admin rights. No Firebase-console workarounds remain for
   day-to-day organizing.
-- **Organizer edit and delete** — organizers can edit any abstract at any status
-  (an accepted one has its public copy rewritten in the same batch) and delete
-  an abstract or a whole participant. See "Deleting things".
+- **Organizer deletion** — organizers can delete an abstract, or a participant
+  and everything they submitted. See "Deleting things".
 
 71 security-rules tests and 78 unit tests cover this.
 
@@ -101,7 +100,9 @@ uploader. Both need the Admin SDK, so `functions/` holds two callables:
 | `deleteParticipant` | all of the above for every abstract they own, their profile, their public listing, and their login |
 
 `deleteParticipant` refuses to delete you, and refuses to delete another
-organizer — revoke their admin rights in Settings first.
+organizer — revoke their admin rights in Settings first. The Participants tab
+does not offer the button in either case, so the refusal is a backstop rather
+than the first line of defence.
 
 **The site works without them.** Every page loads and every other feature works
 if the functions are never deployed; the two delete buttons report that the
@@ -121,13 +122,17 @@ Cloud Functions need the Blaze plan. Nothing else on the site does.
 
 ### What organizers cannot do
 
-Organizers cannot edit a participant's name or affiliation. Those are what
-somebody said about themselves; an organizer who thinks one is wrong should ask
-them. `firestore.rules` enforces this — `participants_public` is owner-write
-only — and there is a test asserting an admin cannot rewrite it.
+**Organizers cannot edit anybody's words.** Not a participant's name or
+affiliation, and not the content of a submitted abstract. An organizer's power
+over a submission is to accept it, reject it, number it, withdraw it, write a
+private reviewer note, or delete it outright — never to rewrite it. Somebody who
+thinks a title has a typo should ask its author to fix it.
 
-They also cannot replace a figure on somebody else's abstract, for the
-`storage.rules` reason above. Everything else on an abstract is editable.
+`firestore.rules` enforces the participant half — `participants_public` is
+owner-write only, and a test asserts an admin cannot rewrite it. The abstract
+half is a product decision rather than a rule: the rules would permit an admin
+write, because accept, reject and re-publish need one. There is simply no editor
+in the console.
 
 ## Local development
 

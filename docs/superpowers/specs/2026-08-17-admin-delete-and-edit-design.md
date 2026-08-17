@@ -1,6 +1,7 @@
 # Organizers editing and deleting abstracts and participants
 
-**Status:** approved 2026-08-17
+**Status:** approved 2026-08-17; abstract editing withdrawn 2026-08-17 after
+review — see "Revision" at the end.
 
 ## Why
 
@@ -132,3 +133,25 @@ a `functions` block, and there is now a deploy step for anything under
 `functions/`. The static site itself is unchanged — it still needs no build, and
 every page still works if the functions are never deployed, minus the two delete
 buttons. The design notes are amended rather than quietly contradicted.
+
+## Revision, same day
+
+Abstract editing was built and then removed at the organizers' request. The
+argument that settled it is the one already applied to participant names: an
+abstract is its author's text, and an organizer who believes it is wrong should
+ask them rather than overwrite it. Accept, reject, number, withdraw, note and
+delete are the whole of an organizer's power over a submission.
+
+What that removed: the inline editor in the Abstracts tab, and with it the
+`republish` and `onDelete` options on `mountAbstractForm` and the admin
+exemption from the acceptance freeze. **The freeze exemption had to go** — with
+no republish path left, an organizer editing their own accepted abstract would
+have left `abstracts_public` serving the old text, which is exactly what the
+freeze exists to prevent.
+
+What survived, because it was worth having anyway: `saveAbstract` takes the
+submitter's uid explicitly instead of inferring it from whoever is signed in,
+and no longer resets `createdAt` on every save.
+
+Deletion is unaffected — it was always the harder half, and it shipped as
+designed.

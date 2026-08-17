@@ -100,15 +100,6 @@ function authorRow({ name = "", marks = "", presenting = false } = {}) {
  * Returns a handle so the caller can arbitrate between several editors:
  * `isDirty()` reports unsaved work and `save()` commits it without firing
  * `onSaved`, leaving the caller in charge of re-rendering.
- *
- * `republish` is supplied by the admin console when an organizer opens an
- * ACCEPTED abstract: it carries the public projection's type and poster number
- * so saving rewrites abstracts_public in the same batch.
- *
- * `onDelete` overrides what the delete button does. The participant's own
- * deletion is a document write plus a figure delete, both of which their own
- * credentials permit; an organizer deleting somebody else's has to go through
- * the Cloud Function, and that is the console's business, not this form's.
  */
 export async function mountAbstractForm(
   host,
@@ -119,9 +110,7 @@ export async function mountAbstractForm(
     abstract = null,
     defaultAuthorName = "",
     defaultAffiliation = "",
-    republish = null,
     onCancel = null,
-    onDelete = null,
     onSaved = () => {},
   },
 ) {
@@ -196,11 +185,10 @@ export async function mountAbstractForm(
 
   const abstractId = abstract?.id ?? newAbstractId();
 
-  // Whose abstract this is, as opposed to who is saving it. They differ exactly
-  // when an organizer edits somebody else's submission, and conflating them
-  // would hand them ownership of it.
+  // The submitter, who is always the person at the keyboard here — the admin
+  // console has no content editor. Passed explicitly all the same, so a save can
+  // never silently reassign ownership.
   const ownerUid = abstract?.ownerUid ?? user.uid;
-  const editingSomeoneElse = ownerUid !== user.uid;
 
   if (abstract) {
     titleEl.value = abstract.title ?? "";
@@ -233,10 +221,11 @@ export async function mountAbstractForm(
   // would otherwise go stale. Rejected and withdrawn stay editable so the
   // participant can revise and resubmit before the deadline.
   //
-  // Organizers are exempt, because the staleness the freeze guards against is
-  // handled for them: saving an accepted abstract rewrites abstracts_public in
-  // the same batch. firestore.rules already permits the write.
-  const frozen = abstract?.status === "accepted" && !isAdmin;
+  // This holds for organizers too, even though firestore.rules would let them
+  // through. The admin console deliberately has no content editor: accept,
+  // reject and the reviewer note are the whole of an organizer's power over
+  // somebody else's words.
+  const frozen = abstract?.status === "accepted";
 
   // Organizers are exempt from the verification gate and the submission window,
   // because firestore.rules already grants them `allow write: if isAdmin()`.
@@ -262,19 +251,6 @@ export async function mountAbstractForm(
     }
   }
   deleteBtn.hidden = !(abstract && editable);
-
-  // storage.rules keys uploads to the uploader's uid and cannot read Firestore
-  // to learn who is an organizer, so an admin simply cannot write to another
-  // person's figure path. Rather than pretend otherwise and fail on save, the
-  // controls are disabled and the reason is stated.
-  if (editable && editingSomeoneElse) {
-    figureEl.disabled = true;
-    figureRemove.disabled = true;
-    const note = document.createElement("span");
-    note.className = "hint";
-    note.textContent = "Only the submitter can change the figure.";
-    figureEl.insertAdjacentElement("afterend", note);
-  }
 
   // Appended AFTER the disable loop on purpose: on a frozen (accepted) abstract
   // every other control is disabled, and Cancel is the only way back out of the
@@ -371,18 +347,9 @@ export async function mountAbstractForm(
         abstractId,
         ownerUid,
         { ...draft, figureUrl, figurePath },
-        {
-          // An organizer's edit leaves the status alone; a participant's save is
-          // a (re)submission, which is what the rules expect.
-          status: editingSomeoneElse ? (abstract?.status ?? "submitted") : "submitted",
-          createdAt: abstract?.createdAt ?? null,
-          republish: abstract?.status === "accepted" ? republish : null,
-        },
+        { createdAt: abstract?.createdAt ?? null },
       );
-      say(editingSomeoneElse
-        ? "Abstract saved." + (abstract?.status === "accepted"
-          ? " The public list has been updated too." : "")
-        : "Abstract saved. You can edit it until the deadline.", "ok");
+      say("Abstract saved. You can edit it until the deadline.", "ok");
       deleteBtn.hidden = false;
       saveBtn.textContent = "Save changes";
       figureEl.value = "";
@@ -406,7 +373,6 @@ export async function mountAbstractForm(
   });
 
   deleteBtn.addEventListener("click", async () => {
-    if (onDelete) return onDelete();
     if (!confirm(`Delete “${abstract?.title ?? "this abstract"}”? This cannot be undone.`)) return;
     deleteBtn.disabled = true;
     try {

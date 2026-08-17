@@ -233,9 +233,10 @@ test("a missing config/site denies submission rather than allowing it", async ()
 
 // ------------------------------------------------- organizer edit and delete
 //
-// The admin console's edit and delete buttons rest entirely on
-// `allow write: if isAdmin()`. Nothing else asserts it, so a later tightening of
-// these rules would break the console silently.
+// Accept, reject, withdraw and re-publish are all an admin writing somebody
+// else's abstract document, and they rest entirely on `allow write: if
+// isAdmin()`. Nothing else asserts it, so a later tightening of these rules
+// would break the review console silently.
 
 test("an admin can edit an abstract they do not own", async () => {
   await seedAdmin(env, "olivia");
@@ -246,9 +247,9 @@ test("an admin can edit an abstract they do not own", async () => {
   ));
 });
 
-// The freeze exists to stop abstracts_public going stale. Admins are exempt
-// because the console rewrites the public copy in the same batch.
-test("an admin can edit an accepted abstract, which its owner cannot", async () => {
+// "Re-publish" writes an already-accepted abstract, which its owner cannot do:
+// the freeze that stops abstracts_public going stale is a rule about owners.
+test("an admin can write an accepted abstract, which its owner cannot", async () => {
   await seedConfig(env);
   await seedAdmin(env, "olivia");
   await seed(env, (fs) => setDoc(doc(fs, "abstracts", "a1"), abstract({ status: "accepted" })));
@@ -260,9 +261,9 @@ test("an admin can edit an accepted abstract, which its owner cannot", async () 
     abstract({ status: "accepted", title: "Fixed by an organizer" })));
 });
 
-// The submission window gates participants, never organizers: a typo found the
-// week before the meeting still has to be fixable.
-test("an admin can edit an abstract after the deadline has passed", async () => {
+// The submission window gates participants, never organizers: acceptances are
+// decided long after the deadline has passed.
+test("an admin can write an abstract after the deadline has passed", async () => {
   await seedConfig(env, { open: false, deadline: PAST });
   await seedAdmin(env, "olivia");
   await seed(env, (fs) => setDoc(doc(fs, "abstracts", "a1"), abstract()));

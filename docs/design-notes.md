@@ -149,6 +149,12 @@ Because the Admin SDK ignores rules, every callable checks the caller itself.
 `request.auth` on a callable is set by the platform from a verified ID token and
 is trustworthy; nothing else the client sends is.
 
+Note what organizers deliberately *cannot* do: edit anybody's words. The rules
+would allow it — accept and re-publish are admin writes to somebody else's
+abstract — so this is a product boundary, not a security one. Accept, reject,
+number, withdraw, note, delete. An abstract is its author's text, and the
+console offers no way to rewrite it.
+
 ### 3.3 No build step
 
 Which means: all paths relative, dependencies vendored, no environment-variable
