@@ -195,9 +195,6 @@ export const savePage = (slug, markdown, adminUid) =>
     updatedBy: adminUid,
   });
 
-/** Revert to the copy committed in the repo, which is the fallback when no doc exists. */
-export const deletePage = (slug) => deleteDoc(doc(db, "pages", slug));
-
 // ----------------------------------------------------------------- schedule
 
 export async function listSchedule() {

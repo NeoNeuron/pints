@@ -71,6 +71,24 @@ details > summary { padding: .75rem 1rem; cursor: pointer; font-weight: 600; }
 details[open] > summary { border-bottom: 1px solid var(--line); }
 details > :not(summary) { padding: 0 1rem 1rem; }
 
+/* The in-place abstract editor. It borrows the disclosure's chrome deliberately:
+   editing an abstract and submitting a new one are the same form, so they should
+   read as the same component. The body's padding is also what keeps the action
+   row off the top border of the next abstract's card. */
+.panel { border: 1px solid var(--line); border-radius: var(--radius); margin: 1rem 0; background: var(--bg); }
+.panel > .panel-head { padding: .75rem 1rem; font-weight: 600; border-bottom: 1px solid var(--line); }
+.panel > .panel-body { padding: 0 1rem 1rem; }
+
+/* Confirmation modals (js/confirm-dialog.js). */
+dialog.confirm {
+  border: 1px solid var(--line); border-radius: var(--radius); padding: 1.25rem;
+  width: min(34rem, calc(100vw - 2rem)); background: var(--bg); color: var(--ink);
+}
+dialog.confirm::backdrop { background: rgba(0, 0, 0, .35); }
+dialog.confirm h2 { margin: 0 0 .5rem; font-size: 1.15rem; }
+dialog.confirm p { margin: 0; }
+dialog.confirm .actions { margin-top: 1.25rem; }
+
 .table-scroll { overflow-x: auto; }
 table { border-collapse: collapse; width: 100%; }
 th, td { text-align: left; padding: .5rem .75rem; border-bottom: 1px solid var(--line); vertical-align: top; }

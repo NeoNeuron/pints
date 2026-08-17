@@ -27,9 +27,9 @@ paid Firebase plan; the CSV export stands in for it.
   an opt-out from being considered for a talk. Admin review with private notes,
   poster-vs-talk assignment, poster numbering, accept/reject/unpublish. Public
   list with search and a topic filter.
-- **Pages** — organizers edit page copy in the admin console; `content/*.md`
-  remains the fallback, and an optional button commits edits back to the
-  repository. See "Editing page content".
+- **Pages** — organizers edit page copy in the admin console; edits live in
+  Firestore and `content/*.md` remains the seed and the read fallback. See
+  "Editing page content".
 - **Schedule** — admin editor for a single-day program, ordered by start time;
   public program page headed by the meeting date from Settings.
 - **Settings** — set the meeting date, open/close the submission window, set the
@@ -59,41 +59,17 @@ organizer contacts all need filling in via `content/*.md`.
 edit the markdown, and press "Save and publish".** The change is live on reload.
 No GitHub account, no commit.
 
-Edits are stored in Firestore under `pages/{slug}`. The `content/*.md` files
-stay in the repository as the seed and the fallback: a page nobody has edited on
-the site is served from its file, and so is a page whose Firestore read fails.
-"Revert to the version in the repo" deletes the Firestore document, which puts
-the committed file back in charge.
+Edits are stored in Firestore under `pages/{slug}`, and that is the only place
+the site writes. The `content/*.md` files stay in the repository as the seed and
+the read fallback: a page nobody has edited on the site is served from its file,
+and so is a page whose Firestore read fails.
 
 Editing the `.md` file on GitHub still works, but **it has no effect on a page
-that has been edited through the admin console** — the Firestore copy wins. If
-you have been editing on the site, edit on the site.
-
-### Keeping the repository in step
-
-The Pages tab has a second button, **"Update in the repo"**, which commits the
-same markdown back to `content/*.md` on `main`. It is optional — the site does
-not need it — but it keeps the git history meaningful and stops the fallback
-copy from rotting. `main` is the branch GitHub Pages serves, so committing also
-redeploys; the button asks for confirmation first.
-
-Because this is a static site with no server, the commit is made from your
-browser with a token you supply:
-
-1. GitHub → **Settings → Developer settings → Personal access tokens →
-   Fine-grained tokens → Generate new token**.
-2. Repository access: **Only select repositories** → this repository.
-3. Permissions: **Contents → Read and write**. Nothing else.
-4. Give it a **short expiry**, then paste it into the "GitHub token" box on the
-   Pages tab.
-
-The token is held in `sessionStorage`, so it disappears when you close the tab,
-and "Forget token" clears it immediately. It is never committed and never
-logged. Understand the trade-off before using this: while the tab is open, the
-token sits in the browser profile, and anyone with access to that profile can
-read it. That is why the scope is one repository and the expiry should be days,
-not months. If you would rather not hold a token at all, skip this button —
-"Save and publish" is what actually updates the website.
+that has been edited through the admin console** — the Firestore copy wins from
+the first save onwards, permanently. If you have been editing on the site, edit
+on the site. To go back to the committed text, open `content/<page>.md`, copy it
+into the editor, and save; deleting `pages/{slug}` in the Firebase console does
+the same thing.
 
 | File | Slug | Appears on |
 |---|---|---|

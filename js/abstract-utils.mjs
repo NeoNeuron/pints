@@ -61,3 +61,29 @@ export function groupByTopic(list, topics) {
   if (other.length) groups.push({ topic: null, items: other });
   return groups;
 }
+
+/**
+ * A stable string standing in for the editable content of one draft.
+ *
+ * The account page has to know whether an open editor holds unsaved work before
+ * it offers to save it, and the only honest answer is "does it still match what
+ * was loaded". Comparing a fingerprint rather than the object keeps key order
+ * out of it, so a draft rebuilt from the DOM compares equal to the one that
+ * seeded it. Figure changes live outside the form fields and are tracked
+ * separately by the caller.
+ */
+export function draftFingerprint(draft) {
+  const authors = (draft?.authors ?? []).map((author) => [
+    String(author?.name ?? "").trim(),
+    (author?.affiliationIndexes ?? []).join(","),
+    author?.presenting ? "1" : "0",
+  ].join("␟"));
+  return JSON.stringify([
+    String(draft?.title ?? "").trim(),
+    String(draft?.topic ?? ""),
+    (draft?.affiliations ?? []).map((a) => String(a).trim()),
+    authors,
+    String(draft?.body ?? ""),
+    draft?.talkConsidered !== false,
+  ]);
+}

@@ -4,6 +4,7 @@ import {
   parseAffiliations,
   validateAbstract,
 } from "./abstract-validation-utils.mjs";
+import { draftFingerprint } from "./abstract-utils.mjs";
 import { validateFigure } from "./figure-utils.mjs";
 import { renderAbstractHtml } from "./markdown.js";
 import { deleteAbstract, getSiteConfig, newAbstractId, saveAbstract } from "./db.js";
@@ -91,12 +92,27 @@ function authorRow({ name = "", marks = "", presenting = false } = {}) {
  * form no longer looks up the participant's submission itself, because there
  * may be several — page-account.js owns the list and decides what to open.
  * `onSaved` is called after a successful save or delete so the caller can
- * refresh that list. `defaultAuthorName` seeds the first author row of a new
- * submission — Firebase Auth carries no display name here, the profile does.
+ * refresh that list. `defaultAuthorName` and `defaultAffiliation` seed the first
+ * author row and the affiliations box of a new submission — Firebase Auth
+ * carries neither, the profile does. `onCancel`, when given, adds a Cancel
+ * button to the action row.
+ *
+ * Returns a handle so the caller can arbitrate between several editors:
+ * `isDirty()` reports unsaved work and `save()` commits it without firing
+ * `onSaved`, leaving the caller in charge of re-rendering.
  */
 export async function mountAbstractForm(
   host,
-  { user, verified, isAdmin = false, abstract = null, defaultAuthorName = "", onSaved = () => {} },
+  {
+    user,
+    verified,
+    isAdmin = false,
+    abstract = null,
+    defaultAuthorName = "",
+    defaultAffiliation = "",
+    onCancel = null,
+    onSaved = () => {},
+  },
 ) {
   host.hidden = false;
   host.innerHTML = TEMPLATE;
@@ -190,6 +206,9 @@ export async function mountAbstractForm(
     status.textContent = abstract.status;
     $("#abs-status").replaceChildren(document.createTextNode("Status: "), status);
   } else {
+    // The author row below defaults to affiliation "1", so seeding the box from
+    // the profile is what makes that mark point at something.
+    affEl.value = defaultAffiliation;
     authorsEl.append(authorRow({ name: defaultAuthorName, marks: "1", presenting: true }));
   }
 
@@ -222,6 +241,18 @@ export async function mountAbstractForm(
     }
   }
   deleteBtn.hidden = !(abstract && editable);
+
+  // Appended AFTER the disable loop on purpose: on a frozen (accepted) abstract
+  // every other control is disabled, and Cancel is the only way back out of the
+  // read-only view.
+  if (onCancel) {
+    const cancelBtn = document.createElement("button");
+    cancelBtn.type = "button";
+    cancelBtn.className = "secondary";
+    cancelBtn.textContent = "Cancel";
+    cancelBtn.addEventListener("click", () => onCancel());
+    $(".actions").append(cancelBtn);
+  }
 
   const refreshPreview = () => {
     $("#abs-preview").innerHTML = renderAbstractHtml(bodyEl.value);
@@ -266,11 +297,26 @@ export async function mountAbstractForm(
     talkConsidered: !noTalkEl.checked,
   });
 
-  form.addEventListener("submit", async (e) => {
-    e.preventDefault();
+  // Taken once the fields are populated, so "dirty" means changed by the person
+  // at the keyboard rather than changed by the mount.
+  let pristine = draftFingerprint(collect());
+  const isDirty = () =>
+    draftFingerprint(collect()) !== pristine || pendingFile !== null || figureCleared;
+
+  /**
+   * Save the form. Returns true only if the abstract reached Firestore.
+   *
+   * `notify` is false when the caller drove the save itself — it is about to
+   * re-render the list anyway, and firing `onSaved` here would tear this form
+   * down underneath the caller mid-flow.
+   */
+  async function submitForm({ notify = true } = {}) {
     const draft = collect();
     const { valid, errors } = validateAbstract(draft, { submissionsOpen, deadline });
-    if (!valid) return sayErrors(errors);
+    if (!valid) {
+      sayErrors(errors);
+      return false;
+    }
 
     saveBtn.disabled = true;
     try {
@@ -292,13 +338,23 @@ export async function mountAbstractForm(
       deleteBtn.hidden = false;
       saveBtn.textContent = "Save changes";
       figureEl.value = "";
-      await onSaved();
+      // What is on screen is now what is stored, so a second switch away must
+      // not prompt again.
+      pristine = draftFingerprint(collect());
+      if (notify) await onSaved();
+      return true;
     } catch (err) {
       say("Could not save your abstract. Please try again.", "err");
       console.error("[pints] saveAbstract", err);
+      return false;
     } finally {
       saveBtn.disabled = false;
     }
+  }
+
+  form.addEventListener("submit", (e) => {
+    e.preventDefault();
+    submitForm();
   });
 
   deleteBtn.addEventListener("click", async () => {
@@ -316,4 +372,11 @@ export async function mountAbstractForm(
       deleteBtn.disabled = false;
     }
   });
+
+  return {
+    id: abstractId,
+    editable,
+    isDirty,
+    save: () => submitForm({ notify: false }),
+  };
 }

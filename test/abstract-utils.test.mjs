@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   authorLineParts,
+  draftFingerprint,
   filterAbstracts,
   groupByTopic,
   nextPosterNumber,
@@ -110,4 +111,74 @@ test("groupByTopic sweeps missing and unknown topics into a final bucket", () =>
 test("groupByTopic handles an empty list and a nullish list", () => {
   assert.deepEqual(groupByTopic([], ["cognitive"]), []);
   assert.deepEqual(groupByTopic(undefined, ["cognitive"]), []);
+});
+
+// --------------------------------------------------------- draftFingerprint
+
+const draft = () => ({
+  title: "Grid cells in the dark",
+  topic: "systems",
+  affiliations: ["École normale supérieure", "Collège de France"],
+  authors: [
+    { name: "Kai Chen", affiliationIndexes: [0], presenting: true },
+    { name: "A Colleague", affiliationIndexes: [0, 1], presenting: false },
+  ],
+  body: "We recorded from medial entorhinal cortex in darkness.",
+  talkConsidered: true,
+});
+
+test("draftFingerprint matches for an unchanged draft rebuilt from the DOM", () => {
+  assert.equal(draftFingerprint(draft()), draftFingerprint(draft()));
+});
+
+test("draftFingerprint ignores key order", () => {
+  const a = draft();
+  const b = {
+    talkConsidered: true,
+    body: a.body,
+    authors: a.authors,
+    affiliations: a.affiliations,
+    topic: a.topic,
+    title: a.title,
+  };
+  assert.equal(draftFingerprint(a), draftFingerprint(b));
+});
+
+// Whitespace the parsers already trim must not read as an unsaved change, or
+// every editor would prompt on open.
+test("draftFingerprint ignores whitespace the parsers strip", () => {
+  const padded = draft();
+  padded.title = "  Grid cells in the dark  ";
+  padded.affiliations = padded.affiliations.map((a) => `  ${a} `);
+  padded.authors = padded.authors.map((x) => ({ ...x, name: ` ${x.name}` }));
+  assert.equal(draftFingerprint(padded), draftFingerprint(draft()));
+});
+
+test("draftFingerprint changes on every editable field", () => {
+  const base = draftFingerprint(draft());
+  const changed = [
+    { ...draft(), title: "Grid cells in the light" },
+    { ...draft(), topic: "computational" },
+    { ...draft(), affiliations: [...draft().affiliations, "Sorbonne"] },
+    { ...draft(), authors: [...draft().authors].reverse() },
+    { ...draft(), body: `${draft().body} Then we did it again.` },
+    { ...draft(), talkConsidered: false },
+  ];
+  for (const d of changed) assert.notEqual(draftFingerprint(d), base);
+});
+
+test("draftFingerprint distinguishes affiliation marks and the presenting author", () => {
+  const base = draftFingerprint(draft());
+  const remarked = draft();
+  remarked.authors[0].affiliationIndexes = [0, 1];
+  assert.notEqual(draftFingerprint(remarked), base);
+
+  const represented = draft();
+  represented.authors[0].presenting = false;
+  represented.authors[1].presenting = true;
+  assert.notEqual(draftFingerprint(represented), base);
+});
+
+test("draftFingerprint tolerates an empty draft", () => {
+  assert.equal(draftFingerprint({}), draftFingerprint({ authors: [], affiliations: [] }));
 });

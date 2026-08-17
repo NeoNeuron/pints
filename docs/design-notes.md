@@ -93,25 +93,35 @@ Set a budget alert on the project. The failure mode worth guarding against is
 someone using the bucket as free hosting, which `storage.rules` limits by
 capping size and content type and keying every object on the uploader's uid.
 
-### 3.2b Writing back to GitHub needs a token in the browser
+### 3.2b Page copy lives in Firestore only — the GitHub write-back was removed
 
-The Pages tab can commit page copy back to `content/*.md`. With no server there
-is no way to hold a GitHub credential safely, so the organizer supplies a
-fine-grained token scoped to one repository, and it lives in `sessionStorage`
-for the life of the tab.
+The Pages tab briefly had an "Update in the repo" button that committed page
+copy back to `content/*.md`, plus a paired "Revert to the version in the repo".
+With no server there was no safe place to hold a GitHub credential, so the
+organizer supplied a fine-grained token scoped to one repository and it lived in
+`sessionStorage` for the life of the tab.
 
-This was considered and rejected during the original design, and the reasoning
-has not changed — it is a genuine trade-off, taken deliberately because the
-alternative (page copy drifting out of git entirely) was judged worse. Two
-things keep it bounded:
+**It was built, shipped, and then taken out at the organizers' request.** The
+feature worked; the trade-off was not worth it to the people who had to run it.
+A token in the browser is a real credential in a place nobody wanted to reason
+about, and the payoff — a tidy git history for page copy — mattered less than
+having one obvious place edits go.
 
-- **The button is optional.** "Save and publish" writes Firestore and is what
-  the website actually reads. Nobody has to hold a token to run the site.
-- **The blast radius is one repository.** A fine-grained token with
-  `Contents: write` on `NeoNeuron/pints` cannot touch anything else.
+The cost we accepted in exchange: `content/*.md` is now a **seed and read
+fallback only**, and it will drift stale relative to what the site shows. That
+is fine as long as nobody mistakes the files for the current copy. Two things
+still depend on them, so they cannot be deleted:
 
-Never move the token to `localStorage`, never log it, and never accept it from
-anywhere but the organizer typing it in.
+- `js/content-hydrate.js` fetches the file when `pages/{slug}` is missing *or*
+  when the Firestore read throws, which is what keeps the site readable during a
+  Firebase outage.
+- `js/admin-pages.js` seeds the editor from the file the first time a page is
+  edited.
+
+Reverting a page now means copying `content/<page>.md` back into the editor, or
+deleting `pages/{slug}` in the Firebase console. If the write-back is ever
+wanted again, the shape to reach for is a server-side action (a GitHub Action on
+a Firestore trigger), not a token in a text box.
 
 ### 3.3 No build step
 

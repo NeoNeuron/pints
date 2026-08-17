@@ -60,9 +60,3 @@ export const PAGES = [
   { slug: "previous-editions", label: "Archive", file: "content/previous-editions.md" },
   { slug: "poster-guidelines", label: "Poster guidelines", file: "content/poster-guidelines.md" },
 ];
-
-/**
- * Where "Update in the repo" writes. GitHub Pages serves this branch, so a
- * commit here is also a deployment.
- */
-export const REPO = { owner: "NeoNeuron", name: "pints", branch: "main" };
