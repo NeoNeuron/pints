@@ -118,13 +118,18 @@ service cloud.firestore {
     // themselves as part of registering. There is no opt-out: account.html says
     // plainly that registering puts you on the list.
     //
+    // Organizers may write it too, so the admin console can correct a name or an
+    // affiliation. The field validation applies to them exactly as it does to
+    // the owner — being an organizer is permission to fix a typo, not permission
+    // to put arbitrary data in a public document.
+    //
     // Deliberately no get() on users/{uid}. A get() would read pre-batch state
     // and so break the single writeBatch that saves the profile and publishes
     // the name together — and it buys no confidentiality, because a user can
     // only ever publish their own name.
     match /participants_public/{uid} {
       allow read: if true;
-      allow create, update: if isOwner(uid)
+      allow create, update: if (isOwner(uid) || isAdmin())
         && request.resource.data.keys().hasOnly(['displayName', 'affiliation',
                                                  'edition', 'updatedAt'])
         && str(request.resource.data.displayName, 80)

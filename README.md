@@ -35,8 +35,9 @@ paid Firebase plan; the CSV export stands in for it.
 - **Settings** — set the meeting date, open/close the submission window, set the
   deadline, grant admin rights. No Firebase-console workarounds remain for
   day-to-day organizing.
-- **Organizer deletion** — organizers can delete an abstract, or a participant
-  and everything they submitted. See "Deleting things".
+- **Organizer edit and delete** — organizers can correct a participant's name or
+  affiliation, edit any abstract at any status, and delete an abstract or a
+  participant outright. See "Editing and deleting as an organizer".
 
 71 security-rules tests and 78 unit tests cover this.
 
@@ -87,7 +88,7 @@ adding an entry there and a `data-page` attribute on the host element.
 Markdown supports headings, lists, links, tables, bold, and italic. It is
 sanitized before rendering, so raw HTML and scripts are stripped.
 
-## Deleting things
+## Editing and deleting as an organizer
 
 Deletion is the one operation that does not run in the browser, because two
 things make it impossible there: a Firebase Auth account can only be deleted by
@@ -120,19 +121,34 @@ CORS error.
 
 Cloud Functions need the Blaze plan. Nothing else on the site does.
 
-### What organizers cannot do
+### Editing
 
-**Organizers cannot edit anybody's words.** Not a participant's name or
-affiliation, and not the content of a submitted abstract. An organizer's power
-over a submission is to accept it, reject it, number it, withdraw it, write a
-private reviewer note, or delete it outright — never to rewrite it. Somebody who
-thinks a title has a typo should ask its author to fix it.
+**Abstracts.** The Abstracts tab has an Edit button per card, which opens the
+submission form inline. Any abstract at any status can be edited. Saving an
+**accepted** one rewrites `abstracts_public` in the same batch, so the public
+list cannot go stale.
 
-`firestore.rules` enforces the participant half — `participants_public` is
-owner-write only, and a test asserts an admin cannot rewrite it. The abstract
-half is a product decision rather than a rule: the rules would permit an admin
-write, because accept, reject and re-publish need one. There is simply no editor
-in the console.
+That last point is load-bearing and is enforced by construction: the form unlocks
+an accepted abstract only when the caller supplies `republish`, the payload
+carrying its type and poster number. The admin console supplies it; `account.html`
+does not, so a submitter — *including an organizer looking at their own accepted
+abstract* — still sees it read-only. Never key that exemption on "is an admin":
+it would unlock the account page, where nothing rewrites the public copy.
+
+Organizers cannot replace somebody else's **figure**, because `storage.rules`
+keys uploads to the uploader's uid and cannot read Firestore to learn who is an
+organizer. The form shows the figure and says so.
+
+**Participants.** The Participants tab has an Edit button per row for the name
+and affiliation, written through the same `saveProfile()` the account page uses,
+so `users/{uid}` and `participants_public/{uid}` move together.
+
+The **email is not editable**: it belongs to the Firebase Auth login, and
+changing only the Firestore copy would leave the two disagreeing about who the
+person is.
+
+Organizers can be edited but not deleted — revoke their rights in Settings
+first.
 
 ## Local development
 

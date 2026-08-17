@@ -1,7 +1,7 @@
 # Organizers editing and deleting abstracts and participants
 
-**Status:** approved 2026-08-17; abstract editing withdrawn 2026-08-17 after
-review — see "Revision" at the end.
+**Status:** approved 2026-08-17; abstract editing withdrawn, then reinstated and
+extended to participants the same day — see the two revisions at the end.
 
 ## Why
 
@@ -155,3 +155,28 @@ and no longer resets `createdAt` on every save.
 
 Deletion is unaffected — it was always the harder half, and it shipped as
 designed.
+
+## Second revision, same day
+
+Both editors were reinstated at the organizers' request, and participant editing
+— name and affiliation, explicitly excluded in the original scope — was added.
+The reasoning that excluded it stands on its merits and is recorded above; the
+organizers weighed it and decided they need to fix typos more than they need the
+guarantee. That is their call to make.
+
+What changed as a result:
+
+- `firestore.rules` now permits `isAdmin()` to write `participants_public`,
+  under exactly the same field validation as the owner. The rules test asserting
+  that an admin *cannot* rewrite a listing is inverted, and joined by one
+  asserting the validation still applies to them.
+- The acceptance freeze came back as `accepted && !republish` rather than the
+  `accepted && !isAdmin` first shipped. See design-notes §3.2d — the role-keyed
+  version silently unlocked an organizer's own accepted abstract on the account
+  page, where nothing rewrites the public copy.
+- Participant email stays read-only: it belongs to the Auth login, and editing
+  only the Firestore copy would leave the two disagreeing.
+
+**Deploying the rules is a required step**, not an optional one — participant
+editing fails with "Missing or insufficient permissions" until
+`firestore.rules` is live.

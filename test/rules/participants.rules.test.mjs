@@ -113,12 +113,35 @@ test("an admin can delete another participant's public listing", async () => {
   await assertSucceeds(deleteDoc(doc(asUser(env, "olivia"), "participants_public", "alice")));
 });
 
-// Deliberately NOT permitted: an organizer must not be able to rewrite the name
-// or affiliation a participant chose for themselves.
-test("an admin cannot rewrite another participant's public listing", async () => {
+// Organizers can correct a name or an affiliation from the admin console.
+test("an admin can rewrite another participant's public listing", async () => {
   await seedAdmin(env, "olivia");
   await seed(env, (fs) => setDoc(doc(fs, "participants_public", "alice"), pub()));
-  await assertFails(setDoc(
+  await assertSucceeds(setDoc(
     doc(asUser(env, "olivia"), "participants_public", "alice"),
-    pub({ displayName: "Renamed by an organizer" })));
+    pub({ displayName: "Alice Dupont-Martin" })));
+});
+
+// Being an organizer is permission to fix a typo, not permission to put
+// arbitrary data in a world-readable document. The field validation is the same
+// for them as for the owner.
+test("an admin's rewrite is validated exactly like the owner's", async () => {
+  await seedAdmin(env, "olivia");
+  await seed(env, (fs) => setDoc(doc(fs, "participants_public", "alice"), pub()));
+  const fs = asUser(env, "olivia");
+
+  await assertFails(setDoc(doc(fs, "participants_public", "alice"), pub({ displayName: "" })));
+  await assertFails(setDoc(doc(fs, "participants_public", "alice"),
+    pub({ displayName: "x".repeat(81) })));
+  await assertFails(setDoc(doc(fs, "participants_public", "alice"),
+    pub({ affiliation: "x".repeat(121) })));
+  await assertFails(setDoc(doc(fs, "participants_public", "alice"),
+    { ...pub(), email: "alice@example.org" }));
+});
+
+test("an ordinary participant still cannot rewrite somebody else's listing", async () => {
+  await seed(env, (fs) => setDoc(doc(fs, "participants_public", "alice"), pub()));
+  await assertFails(setDoc(
+    doc(asUser(env, "mallory"), "participants_public", "alice"),
+    pub({ displayName: "Renamed by a stranger" })));
 });

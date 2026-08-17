@@ -149,11 +149,25 @@ Because the Admin SDK ignores rules, every callable checks the caller itself.
 `request.auth` on a callable is set by the platform from a verified ID token and
 is trustworthy; nothing else the client sends is.
 
-Note what organizers deliberately *cannot* do: edit anybody's words. The rules
-would allow it — accept and re-publish are admin writes to somebody else's
-abstract — so this is a product boundary, not a security one. Accept, reject,
-number, withdraw, note, delete. An abstract is its author's text, and the
-console offers no way to rewrite it.
+### 3.2d The acceptance freeze is keyed on capability, not on role
+
+An accepted abstract is read-only, because editing one would leave
+`abstracts_public` serving the old text. The admin console can edit accepted
+abstracts anyway, since it rewrites the public copy in the same batch.
+
+The obvious way to express that is `frozen = accepted && !isAdmin`. **It is
+wrong**, and it was briefly shipped that way. An organizer opening their own
+accepted abstract on `account.html` would also be unfrozen — and nothing on that
+page rewrites the public copy, so the site would publish one text and display
+another.
+
+The condition is therefore `frozen = accepted && !republish`, where `republish`
+is the payload that makes the rewrite possible. The form unlocks when the caller
+has demonstrably wired up the thing that keeps the two copies in step, not when
+the caller happens to have a role. A missing payload fails closed.
+
+Generally: gate on the capability that makes an action safe, not on the identity
+of whoever usually holds it.
 
 ### 3.3 No build step
 

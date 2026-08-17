@@ -1,4 +1,6 @@
-import { listAbstracts, listAdminUids, listPublicAbstracts, listUsers } from "./db.js";
+import {
+  listAbstracts, listAdminUids, listPublicAbstracts, listUsers, saveProfile,
+} from "./db.js";
 import { sortParticipants } from "./participant-utils.mjs";
 import { describeParticipantDeletion, participantDeletionPlan } from "./deletion-utils.mjs";
 import { confirmChoice } from "./confirm-dialog.js";
@@ -23,12 +25,13 @@ function download(filename, text) {
 }
 
 /**
- * The registration list, with a delete button per row.
+ * The registration list, with edit and delete per row.
  *
- * Organizers can remove a participant but deliberately cannot edit one: a name
- * and an affiliation are what somebody said about themselves, and an organizer
- * who believes one is wrong should ask them rather than overwrite it. The only
- * admin power here is destructive, and it is guarded accordingly.
+ * Editing writes users/{uid} and participants_public/{uid} together through the
+ * same saveProfile() the participant's own account page uses, so the public list
+ * cannot drift from the private record. The email is shown but not editable: it
+ * belongs to the Firebase Auth login, and changing only the Firestore copy would
+ * leave the two disagreeing about who this is.
  */
 export async function mountParticipantsTab(host, { adminUid } = {}) {
   host.innerHTML = `
@@ -50,6 +53,9 @@ export async function mountParticipantsTab(host, { adminUid } = {}) {
     msg.textContent = text;
   };
 
+  // Which row is being edited, if any. One at a time.
+  let editingUid = null;
+
   async function render() {
     // Abstracts are loaded so the confirmation can say what else goes with the
     // participant. The list is small and this tab is opened rarely.
@@ -62,20 +68,98 @@ export async function mountParticipantsTab(host, { adminUid } = {}) {
     const rows = host.querySelector("#p-rows");
     rows.replaceChildren();
     for (const user of sorted) {
-      const tr = document.createElement("tr");
-      for (const value of [user.displayName, user.affiliation, user.email]) {
-        const td = document.createElement("td");
-        td.textContent = value ?? "";
-        tr.append(td);
-      }
-      tr.append(actionCell(user, abstracts, published, adminUids));
-      rows.append(tr);
+      rows.append(editingUid === user.id
+        ? editRow(user)
+        : readRow(user, abstracts, published, adminUids));
     }
 
     host.querySelector("#p-export-all").onclick = () =>
       download("pints-registrations.csv", toCsv(sorted, COLUMNS));
 
     if (!sorted.length) say("Nobody has registered yet.", "warn");
+  }
+
+  function readRow(user, abstracts, published, adminUids) {
+    const tr = document.createElement("tr");
+    for (const value of [user.displayName, user.affiliation, user.email]) {
+      const td = document.createElement("td");
+      td.textContent = value ?? "";
+      tr.append(td);
+    }
+    tr.append(actionCell(user, abstracts, published, adminUids));
+    return tr;
+  }
+
+  /**
+   * The same row with the two editable fields swapped for inputs.
+   *
+   * Only one row is ever in this state, so there is never a second half-typed
+   * correction waiting to be lost.
+   */
+  function editRow(user) {
+    const tr = document.createElement("tr");
+
+    const name = document.createElement("input");
+    name.type = "text";
+    name.maxLength = 80;
+    name.value = user.displayName ?? "";
+    name.setAttribute("aria-label", "Full name");
+
+    const affiliation = document.createElement("input");
+    affiliation.type = "text";
+    affiliation.maxLength = 120;
+    affiliation.value = user.affiliation ?? "";
+    affiliation.setAttribute("aria-label", "Affiliation");
+
+    for (const field of [name, affiliation]) {
+      const td = document.createElement("td");
+      td.append(field);
+      tr.append(td);
+    }
+
+    const emailCell = document.createElement("td");
+    emailCell.className = "muted";
+    emailCell.textContent = user.email ?? "";
+    emailCell.title = "The email address belongs to the login and cannot be changed here.";
+    tr.append(emailCell);
+
+    const actions = document.createElement("div");
+    actions.className = "actions";
+    actions.style.marginTop = "0";
+
+    const save = document.createElement("button");
+    save.textContent = "Save";
+    save.addEventListener("click", async () => {
+      if (!name.value.trim()) return say("A name is required.", "err");
+      save.disabled = true;
+      try {
+        await saveProfile(user.id, {
+          email: user.email,
+          displayName: name.value,
+          affiliation: affiliation.value,
+        });
+        editingUid = null;
+        say(`Saved ${name.value.trim()}.`, "ok");
+        await render();
+      } catch (err) {
+        say("Could not save that participant.", "err");
+        console.error("[pints] admin saveProfile", err);
+        save.disabled = false;
+      }
+    });
+
+    const cancel = document.createElement("button");
+    cancel.className = "secondary";
+    cancel.textContent = "Cancel";
+    cancel.addEventListener("click", async () => { editingUid = null; await render(); });
+
+    actions.append(save, cancel);
+    const td = document.createElement("td");
+    td.append(actions);
+    tr.append(td);
+
+    name.focus();
+    return tr;
   }
 
   function actionCell(user, abstracts, published, adminUids) {
@@ -89,6 +173,21 @@ export async function mountParticipantsTab(host, { adminUid } = {}) {
     const label = user.id === adminUid ? "you"
       : adminUids.has(user.id) ? "organizer"
       : null;
+    const actions = document.createElement("div");
+    actions.className = "actions";
+    actions.style.marginTop = "0";
+    td.append(actions);
+
+    const edit = document.createElement("button");
+    edit.className = "secondary";
+    edit.textContent = "Edit";
+    edit.addEventListener("click", async () => { editingUid = user.id; await render(); });
+    actions.append(edit);
+
+    // Editing an organizer is fine; deleting one is not. Both refusals are
+    // enforced server-side as well — this is about not offering an action that
+    // is going to be rejected, and about making one mis-click unable to
+    // decapitate the committee.
     if (label) {
       const note = document.createElement("span");
       note.className = "muted";
@@ -96,7 +195,7 @@ export async function mountParticipantsTab(host, { adminUid } = {}) {
       note.title = label === "you"
         ? "You cannot delete your own account from the admin console."
         : "Revoke their organizer rights in Settings before deleting them.";
-      td.append(note);
+      actions.append(note);
       return td;
     }
 
@@ -127,7 +226,7 @@ export async function mountParticipantsTab(host, { adminUid } = {}) {
       }
     });
 
-    td.append(button);
+    actions.append(button);
     return td;
   }
 
