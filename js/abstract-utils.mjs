@@ -33,6 +33,47 @@ export function filterAbstracts(list, term) {
   });
 }
 
+/**
+ * Narrow the review pile.
+ *
+ * `type` is the PRESENTATION type, which lives only on the published copy, so
+ * the caller annotates each abstract with `publicType` first (see
+ * annotateAbstracts in abstract-export-utils.mjs). "unpublished" is a real
+ * choice rather than an absence: "what have we not decided on yet" is the
+ * question the committee actually asks.
+ */
+export function filterAdminAbstracts(
+  list,
+  { q = "", status = "", type = "", topic = "", talk = "" } = {},
+) {
+  const matched = (list ?? []).filter((a) =>
+    (!status || a?.status === status)
+    && (!topic || a?.topic === topic)
+    && matchesType(a?.publicType ?? null, type)
+    && matchesTalk(a?.talkConsidered, talk));
+  return filterAbstracts(matched, q);
+}
+
+function matchesType(publicType, wanted) {
+  if (!wanted) return true;
+  if (wanted === "unpublished") return !publicType;
+  return publicType === wanted;
+}
+
+/**
+ * The submitter's talk opt-out, which is the committee's shortlist in reverse:
+ * promoting somebody who ticked "not for a talk" is the one mistake this filter
+ * exists to prevent.
+ *
+ * Only an explicit `false` is an opt-out. A missing field means the question was
+ * never asked, and treating that as a refusal would hide abstracts from the very
+ * list they belong on.
+ */
+function matchesTalk(talkConsidered, wanted) {
+  if (!wanted) return true;
+  return wanted === "optedout" ? talkConsidered === false : talkConsidered !== false;
+}
+
 /** Talks first, then posters by board number; ties broken on title. */
 export function sortPublicAbstracts(list) {
   const rank = (a) => (a?.type === "talk" ? 0 : 1);
@@ -85,5 +126,6 @@ export function draftFingerprint(draft) {
     authors,
     String(draft?.body ?? ""),
     draft?.talkConsidered !== false,
+    String(draft?.figureCaption ?? "").trim(),
   ]);
 }

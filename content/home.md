@@ -26,7 +26,12 @@ Registrations and abstract submissions are open!
 ## Registration
 
 Registration is free but required, so we can plan catering and poster boards.
-[Create an account](login.html) to register and to submit an abstract, if you wish.
+[Create an account](register.html) with your name and affiliation; confirming your
+email address puts you on the [participant list](participants.html) and lets you
+[submit an abstract](submit.html), if you wish. Each participant may
+submit one abstract, and a figure with a caption is part of it. You do not need
+an account to submit: one is created for you.
+Already registered? [Sign in](login.html).
 
 ## Sponsors
 

@@ -4,6 +4,7 @@ import {
   authorLineParts,
   draftFingerprint,
   filterAbstracts,
+  filterAdminAbstracts,
   groupByTopic,
   nextPosterNumber,
   sortPublicAbstracts,
@@ -181,4 +182,76 @@ test("draftFingerprint distinguishes affiliation marks and the presenting author
 
 test("draftFingerprint tolerates an empty draft", () => {
   assert.equal(draftFingerprint({}), draftFingerprint({ authors: [], affiliations: [] }));
+});
+
+// ------------------------------------------------------- admin console filter
+
+const pile = [
+  { id: "a", title: "Recurrent dynamics", body: "V1 recordings", topic: "systems",
+    status: "accepted", publicType: "talk", talkConsidered: true,
+    authors: [{ name: "Alice Dupont" }], affiliations: ["ENS"] },
+  { id: "b", title: "Grid cells", body: "entorhinal", topic: "systems",
+    status: "accepted", publicType: "poster", talkConsidered: false,
+    authors: [{ name: "Bob Martin" }], affiliations: ["Sorbonne"] },
+  { id: "c", title: "Working memory", body: "delay activity", topic: "cognitive",
+    status: "submitted", publicType: null, talkConsidered: true,
+    authors: [{ name: "Chloe Roy" }], affiliations: ["ENS"] },
+  { id: "d", title: "Spiking networks", body: "balanced", topic: "computational",
+    status: "rejected", publicType: null,
+    authors: [{ name: "Dan Lee" }], affiliations: ["Inria"] },
+];
+
+const ids = (list) => list.map((a) => a.id);
+
+test("filterAdminAbstracts with nothing set returns everything", () => {
+  assert.deepEqual(ids(filterAdminAbstracts(pile, {})), ["a", "b", "c", "d"]);
+  assert.deepEqual(ids(filterAdminAbstracts(pile)), ["a", "b", "c", "d"]);
+  assert.deepEqual(filterAdminAbstracts(undefined), []);
+});
+
+test("filterAdminAbstracts narrows by presentation type", () => {
+  assert.deepEqual(ids(filterAdminAbstracts(pile, { type: "talk" })), ["a"]);
+  assert.deepEqual(ids(filterAdminAbstracts(pile, { type: "poster" })), ["b"]);
+});
+
+// "Not published yet" is the question the committee actually asks, so it is a
+// choice rather than the absence of one.
+test("filterAdminAbstracts can single out what has not been published", () => {
+  assert.deepEqual(ids(filterAdminAbstracts(pile, { type: "unpublished" })), ["c", "d"]);
+});
+
+test("filterAdminAbstracts narrows by status and by topic", () => {
+  assert.deepEqual(ids(filterAdminAbstracts(pile, { status: "accepted" })), ["a", "b"]);
+  assert.deepEqual(ids(filterAdminAbstracts(pile, { topic: "cognitive" })), ["c"]);
+});
+
+test("filterAdminAbstracts combines every filter with the free-text search", () => {
+  assert.deepEqual(ids(filterAdminAbstracts(pile,
+    { status: "accepted", topic: "systems", type: "poster" })), ["b"]);
+  assert.deepEqual(ids(filterAdminAbstracts(pile, { q: "dupont" })), ["a"]);
+  assert.deepEqual(ids(filterAdminAbstracts(pile, { q: "ens", type: "unpublished" })), ["c"]);
+  assert.deepEqual(ids(filterAdminAbstracts(pile,
+    { status: "accepted", q: "nothing matches this" })), []);
+});
+
+test("filterAdminAbstracts narrows by the submitter's talk opt-out", () => {
+  assert.deepEqual(ids(filterAdminAbstracts(pile, { talk: "optedout" })), ["b"]);
+  assert.deepEqual(ids(filterAdminAbstracts(pile, { talk: "considered" })), ["a", "c", "d"]);
+});
+
+// An abstract with no talkConsidered field at all was submitted before the
+// question was asked. Counting that as a refusal would hide it from the very
+// shortlist it belongs on.
+test("a missing talk opt-out counts as willing, not as a refusal", () => {
+  const legacy = [{ id: "old", title: "Legacy", authors: [], affiliations: [] }];
+  assert.deepEqual(ids(filterAdminAbstracts(legacy, { talk: "considered" })), ["old"]);
+  assert.deepEqual(ids(filterAdminAbstracts(legacy, { talk: "optedout" })), []);
+});
+
+test("the talk filter combines with the others", () => {
+  assert.deepEqual(ids(filterAdminAbstracts(pile,
+    { talk: "considered", status: "accepted" })), ["a"]);
+  assert.deepEqual(ids(filterAdminAbstracts(pile,
+    { talk: "optedout", type: "talk" })), [],
+  "somebody who opted out and was promoted anyway would show up here");
 });

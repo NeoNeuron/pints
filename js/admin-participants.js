@@ -6,6 +6,7 @@ import { describeParticipantDeletion, participantDeletionPlan } from "./deletion
 import { confirmChoice } from "./confirm-dialog.js";
 import { deleteParticipant } from "./functions.js";
 import { toCsv } from "./csv-utils.mjs";
+import { download } from "./download.js";
 
 // Everyone who registers is on the public list, so there is no consent column
 // to export and no separate "consented only" mailing list any more.
@@ -14,15 +15,6 @@ const COLUMNS = [
   { key: "affiliation", label: "Affiliation" },
   { key: "email", label: "Email" },
 ];
-
-function download(filename, text) {
-  const url = URL.createObjectURL(new Blob([text], { type: "text/csv;charset=utf-8" }));
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = filename;
-  link.click();
-  URL.revokeObjectURL(url);
-}
 
 /**
  * The registration list, with edit and delete per row.

@@ -1,21 +1,42 @@
-import { ABSTRACT_TOPICS, TOPIC_LABELS } from "./config.mjs";
+import { ABSTRACT_TOPICS, LIMITS, TOPIC_LABELS } from "./config.mjs";
 import {
   parseAffiliationIndexes,
   parseAffiliations,
   validateAbstract,
+  validateSubmitter,
 } from "./abstract-validation-utils.mjs";
 import { draftFingerprint } from "./abstract-utils.mjs";
 import { validateFigure } from "./figure-utils.mjs";
 import { renderAbstractHtml } from "./markdown.js";
-import { deleteAbstract, getSiteConfig, newAbstractId, saveAbstract } from "./db.js";
+import { deleteAbstract, getSiteConfig, saveAbstract } from "./db.js";
 import { deleteFigure, uploadFigure } from "./storage.js";
 
 const TEMPLATE = `
   <p id="window-note" class="muted"></p>
-  <div id="abs-msg" class="msg" role="status" aria-live="polite"></div>
+  <div id="abs-notice" class="msg" role="status" aria-live="polite"></div>
   <p id="abs-status"></p>
 
   <form id="abs-form" novalidate>
+    <fieldset id="abs-contact" hidden>
+      <legend>Your details</legend>
+      <p class="hint" id="abs-contact-note"></p>
+
+      <label for="abs-contact-name">Full name
+        <span class="hint">As you want it to appear on the participant list.</span>
+      </label>
+      <input id="abs-contact-name" type="text" maxlength="80" autocomplete="name">
+
+      <label for="abs-contact-affiliation">Affiliation
+        <span class="hint">Lab, institute, or university.</span>
+      </label>
+      <input id="abs-contact-affiliation" type="text" maxlength="120" autocomplete="organization">
+
+      <label for="abs-contact-email">Email
+        <span class="hint">Where the organizers reach you about this abstract.</span>
+      </label>
+      <input id="abs-contact-email" type="email" autocomplete="email">
+    </fieldset>
+
     <label for="abs-title">Title</label>
     <input id="abs-title" type="text" maxlength="200" required>
 
@@ -45,13 +66,21 @@ const TEMPLATE = `
     </label>
     <textarea id="abs-body" maxlength="2500" required></textarea>
 
-    <label for="abs-figure">Figure <span class="hint">Optional. PNG, JPEG, or WebP,
-      up to 5 MB. Large images are shrunk automatically before upload.</span></label>
+    <label for="abs-figure">Figure
+      <span class="hint">Required. PNG, JPEG, or WebP, up to 5 MB. Large images
+        are shrunk automatically before upload.</span></label>
     <input id="abs-figure" type="file" accept="image/png,image/jpeg,image/webp">
     <p id="abs-figure-preview" hidden>
       <img id="abs-figure-img" alt="Figure preview" style="max-width:16rem;height:auto">
       <button type="button" id="abs-figure-remove" class="secondary">Remove figure</button>
     </p>
+
+    <label for="abs-figure-caption">Figure caption
+      <span class="hint">Required. Plain text, no formatting.
+        <span id="abs-caption-count"></span></span>
+    </label>
+    <textarea id="abs-figure-caption" maxlength="300" rows="2"
+      style="min-height:4rem" required></textarea>
 
     <div class="checkline">
       <input id="abs-no-talk" type="checkbox">
@@ -63,6 +92,13 @@ const TEMPLATE = `
 
     <h3>Preview</h3>
     <div id="abs-preview" class="card"></div>
+
+    <!-- Beside the button, not at the top of the form. Validation errors and save
+         results belong where the eye already is when Submit is pressed; a list of
+         problems three screens above it reads as nothing happening at all. The
+         mount-time context (#abs-notice) stays up top, where it is read before
+         anyone starts typing. -->
+    <div id="abs-msg" class="msg" role="status" aria-live="polite"></div>
 
     <div class="actions">
       <button type="submit" id="abs-save">Submit abstract</button>
@@ -88,21 +124,28 @@ function authorRow({ name = "", marks = "", presenting = false } = {}) {
 /**
  * Mount the editor for ONE abstract.
  *
- * `abstract` null means a new submission; otherwise the document to edit. The
- * form no longer looks up the participant's submission itself, because there
- * may be several — page-account.js owns the list and decides what to open.
+ * `abstract` null means a new submission; otherwise the document to edit.
  * `onSaved` is called after a successful save or delete so the caller can
- * refresh that list. `defaultAuthorName` and `defaultAffiliation` seed the first
- * author row and the affiliations box of a new submission — Firebase Auth
- * carries neither, the profile does. `onCancel`, when given, adds a Cancel
- * button to the action row, and `onDelete` overrides what the delete button
- * does — a participant deleting their own abstract is a document write their
- * credentials permit, while an organizer deleting somebody else's has to go
- * through the Cloud Function.
+ * re-render. `defaultAuthorName`, `defaultAffiliation` and `defaultEmail` seed
+ * the first author row, the affiliations box and the contact block — Firebase
+ * Auth carries only the last of the three, the profile carries the others.
+ * `onCancel`, when given, adds a Cancel button to the action row, and `onDelete`
+ * overrides what the delete button does — a participant deleting their own
+ * abstract is a document write their credentials permit, while an organizer
+ * deleting somebody else's has to go through the Cloud Function.
  *
  * `republish` is what unlocks an ACCEPTED abstract. It carries the public
  * projection's type and poster number, and supplying it is a promise that the
  * save will rewrite abstracts_public too.
+ *
+ * `ensureAccount` is how somebody submits without signing in first. Given it and
+ * a null `user`, the form collects a name, an affiliation and an email, and
+ * calls it on save to turn those into an account — because there is no way to
+ * accept an abstract from nobody: firestore.rules keys the document on the
+ * owner's uid and storage.rules keys the figure on the uploader's, so an
+ * unauthenticated visitor cannot write either. Registering therefore happens a
+ * moment before the write rather than after it, which is invisible to the person
+ * filling the form and is what keeps the rules the only authorization boundary.
  *
  * Returns a handle so the caller can arbitrate between several editors:
  * `isDirty()` reports unsaved work and `save()` commits it without firing
@@ -111,13 +154,14 @@ function authorRow({ name = "", marks = "", presenting = false } = {}) {
 export async function mountAbstractForm(
   host,
   {
-    user,
-    verified,
+    user = null,
     isAdmin = false,
     abstract = null,
     defaultAuthorName = "",
     defaultAffiliation = "",
+    defaultEmail = "",
     republish = null,
+    ensureAccount = null,
     onCancel = null,
     onDelete = null,
     onSaved = () => {},
@@ -138,6 +182,11 @@ export async function mountAbstractForm(
   const figurePreview = $("#abs-figure-preview");
   const figureImg = $("#abs-figure-img");
   const figureRemove = $("#abs-figure-remove");
+  const captionEl = $("#abs-figure-caption");
+  const contactEl = $("#abs-contact");
+  const contactName = $("#abs-contact-name");
+  const contactAffiliation = $("#abs-contact-affiliation");
+  const contactEmail = $("#abs-contact-email");
   const noTalkEl = $("#abs-no-talk");
   const saveBtn = $("#abs-save");
   const deleteBtn = $("#abs-delete");
@@ -152,6 +201,16 @@ export async function mountAbstractForm(
     option.textContent = TOPIC_LABELS[topic] ?? topic;
     topicEl.append(option);
   }
+
+  // Two lines, addressed at different moments. `notice` is the state of play when
+  // the form mounts — closed window, frozen abstract, an earlier rejection — and
+  // is read before typing starts. `say` is the answer to something the person
+  // just did, and lives beside the button they just pressed.
+  const notice = (text, kind = "warn") => {
+    const el = $("#abs-notice");
+    el.className = `msg ${kind}`;
+    el.textContent = text;
+  };
 
   const say = (text, kind = "ok") => {
     msg.className = `msg ${kind}`;
@@ -192,19 +251,28 @@ export async function mountAbstractForm(
     if (src) figureImg.src = src;
   };
 
-  const abstractId = abstract?.id ?? newAbstractId();
+  // `signedIn` is mutable because a guest submission creates the account midway
+  // through saving, and everything keyed on a uid has to wait for that.
+  let signedIn = user;
+  const guest = !signedIn && Boolean(ensureAccount);
 
   // Whose abstract this is, as opposed to who is saving it. They differ exactly
   // when an organizer edits somebody else's submission, and conflating them
   // would hand them ownership of it.
-  const ownerUid = abstract?.ownerUid ?? user.uid;
-  const editingSomeoneElse = ownerUid !== user.uid;
+  //
+  // One abstract per participant, and its document id IS the owner's uid — so
+  // there is no id to mint and no way to end up with two. Keyed on ownerUid, not
+  // the saver's uid: an organizer saving somebody else's edit must write their
+  // document, not create one of their own.
+  const ownerUidOf = (saver) => abstract?.ownerUid ?? saver.uid;
+  const editingSomeoneElse = Boolean(signedIn) && ownerUidOf(signedIn) !== signedIn.uid;
 
   if (abstract) {
     titleEl.value = abstract.title ?? "";
     topicEl.value = abstract.topic ?? "";
     affEl.value = (abstract.affiliations ?? []).join("\n");
     bodyEl.value = abstract.body ?? "";
+    captionEl.value = abstract.figureCaption ?? "";
     noTalkEl.checked = abstract.talkConsidered === false;
     for (const author of abstract.authors ?? []) {
       authorsEl.append(authorRow({
@@ -239,22 +307,70 @@ export async function mountAbstractForm(
   // another. A missing republish therefore fails closed, to read-only.
   const frozen = abstract?.status === "accepted" && !republish;
 
-  // Organizers are exempt from the verification gate and the submission window,
-  // because firestore.rules already grants them `allow write: if isAdmin()`.
-  // Gating them in the UI alone would be theatre, and it locks an organizer out
-  // of their own submission whenever verification mail is undeliverable.
-  const editable = (isAdmin || (verified && windowOpen)) && !frozen;
+  // Organizers are exempt from the submission window, because firestore.rules
+  // already grants them `allow write: if isAdmin()`. Gating them in the UI alone
+  // would be theatre.
+  //
+  // Submitting no longer requires a verified email address. It used to, and the
+  // gate was the wrong shape twice over: it locked people out whose institution
+  // quarantined the verification mail (a documented, measured problem — see the
+  // README), and it made "submit without an account" impossible, since a
+  // just-created account is never verified. What the address still gates is the
+  // PUBLIC participant listing, which is where an unproven address would
+  // actually do harm.
+  const editable = (isAdmin || windowOpen) && !frozen;
 
-  if (frozen) say("This abstract has been accepted. Contact the organizers to change it.", "warn");
-  else if (isAdmin && (!verified || !windowOpen)) {
-    say("You are an organizer, so you can submit even though "
-      + (!verified ? "your email is unverified" : "submissions are closed") + ".", "warn");
-  } else if (!verified) say("Verify your email address before submitting.", "warn");
-  else if (!windowOpen) say("Submissions are closed. You can still read your abstract.", "warn");
-  else if (abstract?.status === "rejected") {
-    say("This abstract was not accepted. You can revise and resubmit it before the deadline.", "warn");
+  if (frozen) notice("This abstract has been accepted. Contact the organizers to change it.");
+  else if (isAdmin && !windowOpen) {
+    notice("You are an organizer, so you can submit even though submissions are closed.");
+  } else if (!windowOpen) {
+    notice("Submissions are closed. You can still read your abstract.");
+  } else if (abstract?.status === "rejected") {
+    notice("This abstract was not accepted. You can revise and resubmit it before the deadline.");
   } else if (abstract?.status === "withdrawn") {
-    say("This abstract was withdrawn by the organizers. You can revise and resubmit it before the deadline.", "warn");
+    notice("This abstract was withdrawn by the organizers. You can revise and resubmit it before the deadline.");
+  }
+
+  // The contact block appears whenever the caller offered `ensureAccount` — for a
+  // guest because we need these details to make them an account, and for a
+  // signed-in submitter because "which address will they write to" is a fair
+  // question and the answer is not otherwise on the page. Theirs is read-only:
+  // the address belongs to the login, and changing only this copy would leave
+  // the two disagreeing about who they are.
+  if (ensureAccount && !abstract) {
+    contactEl.hidden = false;
+    contactEmail.value = signedIn?.email ?? defaultEmail;
+    if (guest) {
+      contactName.value = defaultAuthorName;
+      contactAffiliation.value = defaultAffiliation;
+      $("#abs-contact-note").textContent =
+        "You do not need an account first. Submitting creates one for you and "
+        + "emails you a link to set a password.";
+    } else {
+      lockContact();
+    }
+  }
+
+  /**
+   * Once there is an account, the name, affiliation and address belong to it.
+   *
+   * The address goes read-only rather than disappearing, because "which address
+   * will they write to" is a fair question and this is the only place on the
+   * page that answers it. The other two do disappear: they duplicate the profile,
+   * and the account page is where they are edited.
+   *
+   * Labels are SIBLINGS of their inputs here, not ancestors — closest("label")
+   * finds nothing and hiding the input alone would leave an orphaned caption.
+   */
+  function lockContact() {
+    contactEmail.readOnly = true;
+    contactEmail.title = "This is the address you signed in with.";
+    for (const field of [contactName, contactAffiliation]) {
+      field.hidden = true;
+      host.querySelector(`label[for="${field.id}"]`).hidden = true;
+    }
+    $("#abs-contact-note").textContent =
+      "The organizers will write to you here. Change it on your account page.";
   }
 
   if (!editable) {
@@ -291,10 +407,17 @@ export async function mountAbstractForm(
 
   const refreshPreview = () => {
     $("#abs-preview").innerHTML = renderAbstractHtml(bodyEl.value);
-    $("#abs-count").textContent = `${bodyEl.value.length} / 2500`;
+    $("#abs-count").textContent = `${bodyEl.value.length} / ${LIMITS.body}`;
   };
   bodyEl.addEventListener("input", refreshPreview);
   refreshPreview();
+
+  const refreshCaptionCount = () => {
+    $("#abs-caption-count").textContent =
+      `${captionEl.value.length} / ${LIMITS.figureCaption}`;
+  };
+  captionEl.addEventListener("input", refreshCaptionCount);
+  refreshCaptionCount();
 
   $("#abs-add-author").addEventListener("click", () => authorsEl.append(authorRow()));
 
@@ -317,8 +440,15 @@ export async function mountAbstractForm(
     figureEl.value = "";
     figureCleared = Boolean(figurePath);
     showFigure(null);
+    // Removing it is allowed; saving without one is not. Say so now rather than
+    // letting them fill the rest of the form and hit the error at the end.
+    say("Figure removed. Choose another before saving — a figure is required.", "warn");
   });
 
+  // `hasFigure` reduces the two ways a figure can be present — a File waiting to
+  // upload, or an object already in Storage — to the one fact the pure validator
+  // needs, so "a figure is required" is enforced in a tested function rather than
+  // in the DOM.
   const collect = () => ({
     title: titleEl.value,
     topic: topicEl.value,
@@ -330,6 +460,8 @@ export async function mountAbstractForm(
     })),
     body: bodyEl.value,
     talkConsidered: !noTalkEl.checked,
+    figureCaption: captionEl.value,
+    hasFigure: Boolean(pendingFile) || Boolean(figureUrl && !figureCleared),
   });
 
   // Taken once the fields are populated, so "dirty" means changed by the person
@@ -345,21 +477,43 @@ export async function mountAbstractForm(
    * re-render the list anyway, and firing `onSaved` here would tear this form
    * down underneath the caller mid-flow.
    */
+  const contactDetails = () => ({
+    displayName: contactName.value,
+    affiliation: contactAffiliation.value,
+    email: contactEmail.value,
+  });
+
   async function submitForm({ notify = true } = {}) {
     const draft = collect();
-    const { valid, errors } = validateAbstract(draft, { submissionsOpen, deadline });
-    if (!valid) {
+    const errors = [
+      ...validateAbstract(draft, { submissionsOpen, deadline }).errors,
+      // Only a guest is asked for these; a signed-in submitter already has them
+      // on their profile and sees the block read-only.
+      ...(guest ? validateSubmitter(contactDetails()).errors : []),
+    ];
+    if (errors.length) {
       sayErrors(errors);
       return false;
     }
 
     saveBtn.disabled = true;
     try {
+      // The account first, and only once the whole form is valid: it is the one
+      // step that cannot be undone by pressing Cancel, so nothing that a second
+      // attempt would fix should happen before it.
+      if (!signedIn) {
+        say("Setting up your account…", "ok");
+        signedIn = await ensureAccount(contactDetails());
+      }
+      const ownerUid = ownerUidOf(signedIn);
+      const abstractId = abstract?.id ?? ownerUid;
+
       // Upload before the document write: if Storage fails the abstract is not
       // saved pointing at a figure that does not exist.
       if (pendingFile) {
         say("Uploading the figure…", "ok");
-        ({ url: figureUrl, path: figurePath } = await uploadFigure(user.uid, abstractId, pendingFile));
+        ({ url: figureUrl, path: figurePath } =
+          await uploadFigure(signedIn.uid, abstractId, pendingFile));
         pendingFile = null;
       } else if (figureCleared) {
         await deleteFigure(figurePath);
@@ -387,13 +541,18 @@ export async function mountAbstractForm(
       deleteBtn.hidden = false;
       saveBtn.textContent = "Save changes";
       figureEl.value = "";
+      // The account exists now, so the details that created it are the login's
+      // and no longer editable here.
+      if (guest && !contactEl.hidden) lockContact();
       // What is on screen is now what is stored, so a second switch away must
       // not prompt again.
       pristine = draftFingerprint(collect());
       if (notify) await onSaved();
       return true;
     } catch (err) {
-      say("Could not save your abstract. Please try again.", "err");
+      // A refusal written for a human — "that address already has an account" —
+      // is worth far more than a generic apology, so it is shown as-is.
+      say(err?.userFacing ? err.message : "Could not save your abstract. Please try again.", "err");
       console.error("[pints] saveAbstract", err);
       return false;
     } finally {
@@ -411,7 +570,7 @@ export async function mountAbstractForm(
     if (!confirm(`Delete “${abstract?.title ?? "this abstract"}”? This cannot be undone.`)) return;
     deleteBtn.disabled = true;
     try {
-      await deleteAbstract(abstractId);
+      await deleteAbstract(abstract.id);
       // Best-effort: an orphaned figure is invisible and costs nothing, whereas
       // failing the delete over it would leave the abstract in place.
       await deleteFigure(figurePath).catch((err) => console.error("[pints] deleteFigure", err));
@@ -424,7 +583,7 @@ export async function mountAbstractForm(
   });
 
   return {
-    id: abstractId,
+    id: abstract?.id ?? null,
     editable,
     isDirty,
     save: () => submitForm({ notify: false }),

@@ -1,15 +1,13 @@
 import { mountLayout, setAuthLink } from "./layout.js";
 import { warnIfUnconfigured } from "./firebase.js";
 import { checkIsAdmin, refreshVerification, requireUser, sendVerification, signOutNow } from "./auth.js";
-import { getProfile, listMyAbstracts, saveProfile } from "./db.js";
-import { TOPIC_LABELS } from "./config.mjs";
+import { getMyAbstract, getProfile, publishParticipant, saveProfile } from "./db.js";
 // Static, not a runtime import(): this page always needs the form, and a
 // dynamically imported module is fetched with ordinary HTTP-cache semantics,
 // so it survives a hard reload as a stale copy for up to GitHub Pages'
 // 10-minute max-age. Static imports are part of the module graph and are
 // revalidated with the document.
 import { mountAbstractForm } from "./abstract-form.js";
-import { confirmChoice } from "./confirm-dialog.js";
 
 mountLayout();
 
@@ -40,9 +38,11 @@ if (warnIfUnconfigured(msg)) {
     const explain = document.createElement("p");
     explain.style.margin = "0 0 .5rem";
     explain.textContent =
-      "Your email address is not verified yet, so you cannot submit an abstract. "
-      + "The message comes from a firebaseapp.com address — check your spam or "
-      + "quarantine folder, since some university mail servers hold it there.";
+      "Your email address is not confirmed yet, so your name is not on the "
+      + "participant list. It goes on automatically the moment you click the "
+      + "link — you can submit an abstract either way. The message comes from a "
+      + "firebaseapp.com address, so check your spam or quarantine folder: some "
+      + "university mail servers hold it there.";
 
     const again = document.createElement("button");
     again.type = "button";
@@ -70,6 +70,17 @@ if (warnIfUnconfigured(msg)) {
   nameEl.value = profile?.displayName ?? user.displayName ?? "";
   affEl.value = profile?.affiliation ?? "";
 
+  // Confirming the address is what puts you on the participant list — there is
+  // no button, and there never was an opt-in. Registration writes users/{uid}
+  // only; this is the other half, and it runs here because the verification
+  // link lands on this page (see returnToAccount() in auth.js). It is idempotent
+  // on purpose: a registration interrupted between the two writes heals itself
+  // the next time the person opens their account.
+  if (verified && profile?.displayName) {
+    publishParticipant(user.uid, profile)
+      .catch((err) => console.error("[pints] publishParticipant", err));
+  }
+
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
     const displayName = nameEl.value.trim();
@@ -79,8 +90,11 @@ if (warnIfUnconfigured(msg)) {
         email: user.email,
         displayName,
         affiliation: affEl.value,
-      });
-      say("Saved.", "ok");
+      }, { publish: verified });
+      say(verified
+        ? "Saved. The participant list has been updated."
+        : "Saved. Your name goes on the participant list once you confirm your "
+          + "email address.", "ok");
     } catch (err) {
       say("Could not save your details. Please try again.", "err");
       console.error("[pints] saveProfile", err);
@@ -92,280 +106,112 @@ if (warnIfUnconfigured(msg)) {
     location.replace("index.html");
   });
 
-  await mountAbstracts({ user, verified, isAdmin, profile });
+  await mountAbstracts({ user, isAdmin, profile });
 }
 
 /**
- * The abstracts area: a list of what this person has already submitted, and a
- * disclosure that is CLOSED by default.
+ * The abstract area: one submission per participant, so there is no list.
  *
- * Submitting an abstract is optional and most registrations never will, so the
- * form is not on the page until someone asks for it. <details> gives the
- * open/close behaviour, keyboard handling, and screen-reader semantics without
- * any JavaScript of our own.
+ * Either they have an abstract and the editor is mounted for it, or they do not
+ * and the blank form waits behind a closed <details>. The disclosure stays for
+ * the second case because submitting is optional and most registrations never
+ * will — no reason to make everyone pay for the form or its config read — and
+ * because it is what `account.html#abstract` opens when somebody arrives from
+ * the "Submit an abstract" button on the home page.
  *
- * Exactly one editor is open at any moment. That is enforced structurally
- * rather than by asking each row to behave: `editingId` says which abstract is
- * being edited, `render()` reads it and opens that one panel, and every route
- * into editing goes through `requestEdit`. Two editors open at once meant two
- * drafts of the same list competing, and a save from either silently discarding
- * the other.
+ * Everything that used to arbitrate between several open editors is gone with
+ * the second abstract that made it necessary.
  */
-async function mountAbstracts({ user, verified, isAdmin, profile }) {
+async function mountAbstracts({ user, isAdmin, profile }) {
   const host = document.getElementById("abstract-section");
   host.hidden = false;
   host.innerHTML = `
-    <h2>Abstracts</h2>
-    <p class="muted">You may submit as many abstracts as you like. Each one is
-      a poster, and every poster is considered for a talk unless you opt out.</p>
-    <div id="abs-list-msg" class="msg" role="status" aria-live="polite"></div>
-    <div id="abs-list"></div>
-    <details id="abs-new">
+    <h2>Abstract</h2>
+    <p class="muted">You may submit one abstract. It is presented as a poster, and
+      every poster is considered for a talk unless you opt out.</p>
+    <div id="abs-msg" class="msg" role="status" aria-live="polite"></div>
+    <div id="abs-host"></div>
+    <details id="abs-new" hidden>
       <summary>I would like to submit an abstract</summary>
       <div id="abs-new-host"></div>
     </details>`;
 
-  const listMsg = host.querySelector("#abs-list-msg");
-  const listEl = host.querySelector("#abs-list");
+  const listMsg = host.querySelector("#abs-msg");
+  const editHost = host.querySelector("#abs-host");
   const details = host.querySelector("#abs-new");
   const formHost = host.querySelector("#abs-new-host");
 
-  // Guards the toggle listener below: opening or closing the disclosure
-  // programmatically fires `toggle`, which would otherwise re-enter the
-  // arbitration we are already in the middle of.
-  let mounting = false;
-
-  // `editor` is the handle on whichever form is currently mounted — a row's
-  // editor or the new-submission form — because "one panel at a time" has to
-  // cover both. `editingId` names the row, and is null when the open form is the
-  // new-submission one. It survives a re-render; `editor` does not, because the
-  // row form it points at is destroyed whenever the list is rebuilt.
-  let editingId = null;
-  let editor = null;
-  let editorLabel = "";
-
-  const summaryEl = details.querySelector("summary");
-
-  // One place decides the disclosure's label, so deleting your last abstract
-  // cannot leave it reading "Submit another abstract".
-  const setSummary = (count) => {
-    summaryEl.textContent = count
-      ? "Submit another abstract"
-      : "I would like to submit an abstract";
+  const defaults = {
+    user,
+    isAdmin,
+    defaultAuthorName: profile?.displayName ?? "",
+    defaultAffiliation: profile?.affiliation ?? "",
   };
 
-  /**
-   * Clear the way for another panel, asking first if there is unsaved work.
-   *
-   * Returns false if the person backed out, in which case the caller must leave
-   * everything exactly as it was. A failed save also returns false: the form has
-   * already shown why on its own message line, and moving on regardless would
-   * throw the work away behind a message nobody read.
-   */
-  async function releaseEditor(what) {
-    if (!editor || !editor.editable || !editor.isDirty()) return true;
-
-    const choice = await confirmChoice({
-      title: "Unsaved changes",
-      message: `You are still editing ${editorLabel}. Save your changes before ${what}?`,
-      choices: [
-        { value: "save", label: "Save and continue" },
-        { value: "discard", label: "Discard changes", className: "danger" },
-        { value: "cancel", label: "Cancel", className: "secondary" },
-      ],
-    });
-
-    if (choice === "save") return editor.save();
-    return choice === "discard";
-  }
-
-  /** Collapse the disclosure without going back through the toggle handler. */
-  function collapseNewForm() {
-    mounting = true;
-    details.open = false;
-    mounting = false;
-  }
-
-  /** Collapse the new-submission disclosure and throw its draft away. */
-  function closeNewForm() {
-    collapseNewForm();
-    formHost.replaceChildren();
-  }
-
-  /** The single entry point into editing, from a row's Edit/View button. */
-  async function requestEdit(abstract) {
-    if (editingId === abstract.id) return;
-    if (!(await releaseEditor(`opening “${abstract.title ?? "another abstract"}”`))) return;
-    // The disclosure counts as a panel, so it closes too — otherwise a half-typed
-    // new submission sits open below the row you just started editing.
-    closeNewForm();
-    editor = null;
-    editingId = abstract.id;
-    await render();
-  }
-
-  /** Mount the blank "new abstract" form in the disclosure at the bottom. */
+  /** Mount the blank form. Deferred until the disclosure is first opened. */
   const openNewForm = async () => {
-    mounting = true;
-    details.open = true;
-    editor = await mountAbstractForm(formHost, {
-      user,
-      verified,
-      isAdmin,
-      defaultAuthorName: profile?.displayName ?? "",
-      defaultAffiliation: profile?.affiliation ?? "",
-      onSaved: async () => {
-        editor = null;
-        closeNewForm();
-        await render();
-      },
-    });
-    editorLabel = "your new abstract";
-    mounting = false;
+    if (formHost.firstChild) return;   // a half-typed draft is still a draft
+    await mountAbstractForm(formHost, { ...defaults, onSaved: render });
   };
 
-  /**
-   * Editing happens in place.
-   *
-   * The editor is mounted into the row it belongs to and the summary card is
-   * hidden while it is open, so the form is never far from the abstract it is
-   * editing and the same abstract is never on screen twice. Sending edits to
-   * the disclosure at the bottom of the list meant scrolling past every other
-   * submission to reach them.
-   */
-  function row(abstract) {
-    const wrapper = document.createElement("div");
-    const summary = card(abstract, () => requestEdit(abstract));
-    const frozen = abstract.status === "accepted";
+  details.addEventListener("toggle", () => {
+    if (details.open) openNewForm().catch((err) => fail(err));
+  });
 
-    // Same chrome as the "submit an abstract" disclosure, because it is the same
-    // form. The head also names what is being edited, which the disclosure gets
-    // from its summary.
-    const editHost = document.createElement("div");
-    editHost.className = "panel";
-    editHost.hidden = true;
-    const head = document.createElement("div");
-    head.className = "panel-head";
-    head.textContent = `${frozen ? "Viewing" : "Editing"} “${abstract.title ?? "(untitled)"}”`;
-    const body = document.createElement("div");
-    body.className = "panel-body";
-    editHost.append(head, body);
+  const fail = (err) => {
+    listMsg.className = "msg err";
+    listMsg.textContent = "Could not load your abstract.";
+    console.error("[pints] abstract", err);
+  };
 
-    wrapper.append(summary, editHost);
+  const say = (text, kind = "ok") => {
+    listMsg.className = `msg ${kind}`;
+    listMsg.textContent = text;
+  };
 
-    const stopEditing = () => {
-      editingId = null;
-      editor = null;
-      body.replaceChildren();
-      editHost.hidden = true;
-      summary.hidden = false;
-    };
-
-    async function startEditing() {
-      summary.hidden = true;
-      editHost.hidden = false;
-
-      editor = await mountAbstractForm(body, {
-        user,
-        verified,
-        isAdmin,
-        abstract,
-        defaultAuthorName: profile?.displayName ?? "",
-        onCancel: stopEditing,
-        onSaved: async () => {
-          editingId = null;
-          await render();
-        },
-      });
-      editorLabel = `“${abstract.title ?? "(untitled)"}”`;
-    }
-
-    return { wrapper, startEditing };
-  }
-
-  function card(abstract, onEdit) {
-    const article = document.createElement("article");
-    article.className = "card";
-
-    const h3 = document.createElement("h3");
-    h3.textContent = abstract.title ?? "(untitled)";
-
-    const meta = document.createElement("p");
-    for (const label of [TOPIC_LABELS[abstract.topic] ?? abstract.topic, abstract.status]) {
-      if (!label) continue;
-      const pill = document.createElement("span");
-      pill.className = "pill";
-      pill.textContent = label;
-      meta.append(pill, " ");
-    }
-    if (abstract.talkConsidered === false) {
-      const note = document.createElement("span");
-      note.className = "muted";
-      note.textContent = "not to be considered for a talk";
-      meta.append(note);
-    }
-
-    const actions = document.createElement("div");
-    actions.className = "actions";
-    const edit = document.createElement("button");
-    edit.className = "secondary";
-    edit.textContent = abstract.status === "accepted" ? "View" : "Edit";
-    edit.addEventListener("click", onEdit);
-    actions.append(edit);
-
-    article.append(h3, meta, actions);
-    return article;
-  }
+  // Which abstract the editor currently holds. The form calls back on every
+  // save as well as on delete, and re-mounting after an ordinary save would
+  // throw away the "Abstract saved" line the person is reading. So a render
+  // only rebuilds when the abstract has appeared or disappeared.
+  let mountedId = null;
 
   async function render() {
     try {
-      const mine = await listMyAbstracts(user.uid);
-      // A row's form is gone the moment the list is replaced, so drop the handle
-      // before anything can call save() on a detached DOM tree. The
-      // new-submission form lives outside the list and survives.
-      if (editingId !== null) editor = null;
-      const rows = mine.map((abstract) => ({ abstract, ...row(abstract) }));
-      listEl.replaceChildren(...rows.map((r) => r.wrapper));
-      listMsg.className = "msg";
-      listMsg.textContent = "";
-      setSummary(mine.length);
+      const mine = await getMyAbstract(user.uid);
+      if (mine && mine.id === mountedId) return;
 
-      const open = rows.find((r) => r.abstract.id === editingId);
-      if (open) {
-        await open.startEditing();
-        open.wrapper.scrollIntoView({ behavior: "smooth", block: "nearest" });
-      } else {
-        // The abstract being edited was deleted, or this is the first render.
-        editingId = null;
+      if (!mine) {
+        mountedId = null;
+        editHost.replaceChildren();
+        // A deleted abstract leaves a stale draft behind; clear it so reopening
+        // the disclosure mounts a blank form.
+        formHost.replaceChildren();
+        details.hidden = false;
+        listMsg.className = "msg";
+        listMsg.textContent = "";
+        // Arriving from "Submit an abstract" on the home page: open the form
+        // rather than leaving a closed disclosure they have to find and click.
+        if (location.hash === "#abstract") details.open = true;
+        if (details.open) await openNewForm();
+        return;
       }
+
+      const first = mountedId === null && Boolean(formHost.firstChild);
+      mountedId = mine.id;
+      details.hidden = true;
+      details.open = false;
+      formHost.replaceChildren();
+      await mountAbstractForm(editHost, { ...defaults, abstract: mine, onSaved: render });
+      if (first) say("Abstract submitted. You can edit it until the deadline.", "ok");
+      else { listMsg.className = "msg"; listMsg.textContent = ""; }
     } catch (err) {
-      listMsg.className = "msg err";
-      listMsg.textContent = "Could not load your abstracts.";
-      console.error("[pints] listMyAbstracts", err);
+      fail(err);
     }
   }
 
-  // Mount the blank form only when the disclosure is first opened, so a visitor
-  // who never submits does not pay for the form or its config read. Opening it
-  // is also a route out of an editor, so it goes through the same arbitration.
-  details.addEventListener("toggle", async () => {
-    if (!details.open || mounting) return;
-    // Reopening the disclosure over its own half-typed draft is not a switch —
-    // it is the same panel — so it must not prompt about itself.
-    if (editingId === null && formHost.firstChild) return;
-    if (!(await releaseEditor("starting a new one"))) {
-      collapseNewForm();
-      return;
-    }
-    if (editingId !== null) {
-      editingId = null;
-      editor = null;
-      await render();
-    }
-    // A draft left in a collapsed disclosure is still a draft: reopening shows
-    // it again rather than mounting a blank form over it.
-    if (!formHost.firstChild) await openNewForm();
-  });
-
   await render();
+
+  if (location.hash === "#abstract") {
+    host.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
 }

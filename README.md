@@ -20,13 +20,17 @@ renders, the custom 404 works, and the browser console is clean.
 `CLAUDE.md` is implemented except the bonus mailing-list *sending*, which needs a
 paid Firebase plan; the CSV export stands in for it.
 
-- **Accounts** — sign up, sign in, password reset, email verification. Registering
-  puts you on the public participant list; there is no separate opt-in.
-- **Abstracts** — as many submissions per person as you like, each with a topic
-  (cognitive / systems / computational), an optional figure, a live preview, and
-  an opt-out from being considered for a talk. Admin review with private notes,
-  poster-vs-talk assignment, poster numbering, accept/reject/unpublish. Public
-  list with search and a topic filter.
+- **Accounts** — a registration page that takes a name, an affiliation and an
+  email, a separate sign-in page, password reset, and email verification.
+  Confirming the address is what puts you on the public participant list: there
+  is no opt-in, and no button. See "Registering and being listed".
+- **Abstracts** — **one per participant**, with a topic (cognitive / systems /
+  computational), a **required figure and caption**, a live preview, and an
+  opt-out from being considered for a talk. **No account needed to submit** —
+  `submit.html` creates one from the email on the form. Admin review with a
+  per-organizer 1–10 score and private note, filters (text, status, talk/poster,
+  talk opt-out, topic), two CSV exports, poster-vs-talk assignment, poster
+  numbering, accept/reject/unpublish. Public list with search and a topic filter.
 - **Pages** — organizers edit page copy in the admin console; edits live in
   Firestore and `content/*.md` remains the seed and the read fallback. See
   "Editing page content".
@@ -35,11 +39,13 @@ paid Firebase plan; the CSV export stands in for it.
 - **Settings** — set the meeting date, open/close the submission window, set the
   deadline, grant admin rights. No Firebase-console workarounds remain for
   day-to-day organizing.
+- **Archive** — a slideshow of photographs from previous editions, synced from a
+  Dropbox folder by an organizer. See "Photographs of previous editions".
 - **Organizer edit and delete** — organizers can correct a participant's name or
   affiliation, edit any abstract at any status, and delete an abstract or a
   participant outright. See "Editing and deleting as an organizer".
 
-71 security-rules tests and 78 unit tests cover this.
+88 security-rules tests and 132 unit tests cover this.
 
 ### Deploying rules — order matters
 
@@ -55,6 +61,180 @@ npx firebase deploy --only firestore:rules,storage
 
 The site content is still placeholder: the edition dates, venue, keynote, and
 organizer contacts all need filling in via `content/*.md`.
+
+## Registering and being listed
+
+Registration is one form, `register.html`: full name, affiliation, email,
+password. It creates the Firebase Auth account, sends the confirmation email,
+and writes `users/{uid}` — the private profile.
+
+**It does not put anyone on the participant list yet.** That happens when the
+address is confirmed: the verification link lands on `account.html`, which forces
+a fresh ID token (`refreshVerification()` — the token's `email_verified` is stale
+for up to an hour otherwise) and, when it comes back true, writes
+`participants_public/{uid}`. There is no opt-in checkbox and no button; the write
+is idempotent and runs on every account-page load, so a registration interrupted
+between the two writes heals itself the next time the person opens their account.
+
+`login.html` is sign-in and password reset only. Both pages carry a `?next=`
+target through registration, so "Submit an abstract" on the home page brings a
+signed-out visitor back to `account.html#abstract` once they have an account.
+`js/redirect-utils.mjs` validates that target against a deliberately narrow
+pattern — one page of this site, optionally with a fragment — so the parameter
+cannot be turned into an open redirect.
+
+## One abstract per participant
+
+**The abstract's document id is the owner's uid.** That is what makes "one each"
+real rather than advisory: there is no second slot to create, no rule has to
+count anything, and Firestore rules cannot count documents anyway. `ownerUid`
+stays as a field because the review console joins submitter details on it and
+`deleteParticipant` queries it.
+
+A **figure and a caption are both required**, enforced in
+`js/abstract-validation-utils.mjs` for a readable error and again in
+`firestore.rules` for anyone holding the public API key. Organizers writing
+through `allow write: if isAdmin()` skip the check, so a record that predates the
+requirement can still be repaired.
+
+Only an **accepted** abstract is frozen to its owner. Rejected and withdrawn stay
+editable, and with a single slot per person that matters more than it used to: a
+rejected participant would otherwise be unable to revise, delete, or replace
+their submission, because there is nowhere else to put a second attempt.
+
+### Submitting without an account
+
+`submit.html` works signed out. The form carries a "Your details" block — name,
+affiliation, **email, all required** — and on save it creates a Firebase account
+from them a moment *before* writing the abstract.
+
+**Before, not after, and that is forced.** `firestore.rules` keys the abstract on
+the owner's uid and `storage.rules` keys the figure on the uploader's, so an
+unauthenticated visitor cannot write either; opening those up would hand the
+collection to anyone holding the public API key. Creating the account first is
+what lets the rules stay the only authorization boundary while the person filling
+the form never sees a signup step.
+
+They never choose a password, so a random one is generated and discarded and they
+get a **"set your password" email** instead of a verification one. That is not a
+shortcut: completing a password reset proves the same thing a verification link
+proves, and Firebase marks the address verified when they do. One email, both
+jobs, no dead end where somebody holds an account they cannot sign in to.
+
+A signed-in submitter sees the same block with their **login email filled in and
+read-only** — the address belongs to the login, and a second editable copy would
+leave the two disagreeing about who they are.
+
+If the address already has an account, the form says so and offers a sign-in
+link. Nothing navigates away, so signing in in another tab picks up here — the
+page re-renders on auth state — and the draft is still on screen. No account and
+no abstract are created in that case: account creation runs only after the whole
+form validates, and the abstract write only after the account exists.
+
+**When the submission lands, a panel says to go and check the email**, names the
+address it went to, warns that the sender is a `firebaseapp.com` domain that
+university filters quarantine, and carries its own resend button. That moment is
+the only one where the person is definitely still paying attention, and until
+they open the mail they have no password, no verified address, and no place on
+the participant list.
+
+**Submitting no longer requires a verified email address.** That gate was the
+wrong shape twice over: institutional mail filters quarantine the verification
+message (measured — see "Verification emails and institutional mail filters"),
+and a just-created account is never verified. What still stands between the
+submission pile and the open internet is an account per submission, one abstract
+per account, the submission window, and a required figure. What an unproven
+address would actually harm is the **public participant list**, and that still
+waits for verification.
+
+## Reviewing abstracts
+
+The Abstracts tab filters on free text, status, presentation (talk / poster / not
+published yet), the submitter's **talk opt-out**, and topic, and both CSV exports
+cover exactly what the filters are showing — the button row says so when they are narrower than the whole pile.
+
+**Every organizer has their own 1–10 score and their own private note.** They are
+stored as a map keyed by reviewer uid inside `abstract_reviews/{abstractId}`, and
+written with a merge into that nested map rather than a whole-document set — two
+organizers reviewing the same abstract at the same time must not overwrite each
+other. A note without a score counts as a review ("conflict of interest,
+abstaining") and does not drag the mean down.
+
+Notes written before scores were per-organizer are shown read-only, labelled as
+earlier shared notes. They are not migrated: they belong to whoever wrote them,
+and nothing records who that was.
+
+Two exports:
+
+| Button | Contents |
+|---|---|
+| Export abstracts (CSV) | one row per abstract: title, topic, status, presentation, poster number, authors with affiliation marks, submitter and email, figure caption and URL, dates, body |
+| Export reviewer scores (CSV) | one row per abstract, **one column per organizer**, then the mean and how many scored it. An organizer who has scored nothing still gets a column — an empty one is a fact worth seeing |
+
+### "Update published copy" — what it is for
+
+On an abstract that is already accepted, the accept button reads **Update
+published copy**, and it is not a second acceptance. It is the only control that
+can change poster ↔ talk or the board number after acceptance, and the only one
+that pushes an edit made elsewhere into `abstracts_public`. Withdraw-then-accept
+would do the same thing while removing the abstract from the public list in
+between.
+
+It used to restamp `acceptedAt` on every click, so "when was this accepted"
+became "when did somebody last touch it"; the original is now carried through.
+It also used to write the reviewer-note textarea on every click, and that
+textarea was filled asynchronously after the card rendered — a fast click saved
+an empty note over a real one. Accept and reject no longer write notes at all.
+
+## Photographs of previous editions
+
+The Archive page carries a slideshow, one photograph at a time, one edition at a
+time, fed from `gallery/{year}` in Firestore. An organizer pastes a Dropbox
+folder link in the admin console's **Archive** tab and presses **Sync from
+Dropbox**; captions are typed there and survive later syncs, matched by file name.
+
+**A browser cannot list a Dropbox folder.** Every Dropbox listing endpoint needs
+an `Authorization` header, and a static site has nowhere safe to keep one — this
+is the same problem that got the GitHub write-back removed (`docs/design-notes.md`
+§3.2b). So the token lives in the `syncDropboxGallery` callable, the result is
+cached in Firestore, and visitors never call a function at all.
+
+### Setting up the Dropbox app
+
+1. <https://www.dropbox.com/developers/apps> → **Create app** → **Scoped access**
+   → **Full Dropbox** → name it. Under **Permissions**, tick `sharing.read` and
+   `files.metadata.read`, and **Submit**.
+2. On the **Settings** tab, note the **App key** and **App secret**.
+3. Get a refresh token. In a browser, visit (one line, your app key substituted):
+   ```
+   https://www.dropbox.com/oauth2/authorize?client_id=APP_KEY&response_type=code&token_access_type=offline
+   ```
+   Approve, copy the code it shows, and exchange it:
+   ```bash
+   curl -u APP_KEY:APP_SECRET https://api.dropbox.com/oauth2/token \
+     -d code=THE_CODE -d grant_type=authorization_code
+   ```
+   The `refresh_token` in the reply does not expire. An *access* token would —
+   after four hours — which is why this is the one we store.
+4. Store all three as secrets, never in the repository:
+   ```bash
+   npx firebase functions:secrets:set DROPBOX_APP_KEY
+   npx firebase functions:secrets:set DROPBOX_APP_SECRET
+   npx firebase functions:secrets:set DROPBOX_REFRESH_TOKEN
+   npx firebase deploy --only functions
+   ```
+5. In Dropbox, share the photo folder with **Anyone with the link**, copy that
+   link, and paste it into the Archive tab with the year.
+
+**The site works without any of this.** The Archive page is exactly what it was
+before there were photographs if the gallery is empty, the function is not
+deployed, or Firestore is unreachable — the slideshow mounts nothing at all.
+
+Two limits worth knowing: at most 200 photographs a year (enforced in both the
+callable and `firestore.rules`), and Dropbox caps public-link bandwidth at
+20 GB/day on a Basic account. A conference gallery is nowhere near either, but if
+the Archive page ever draws real traffic, move the photographs to Firebase
+Storage.
 
 ## Editing page content
 
@@ -93,12 +273,19 @@ sanitized before rendering, so raw HTML and scripts are stripped.
 Deletion is the one operation that does not run in the browser, because two
 things make it impossible there: a Firebase Auth account can only be deleted by
 its owner from a client, and `storage.rules` scopes figure deletion to the
-uploader. Both need the Admin SDK, so `functions/` holds two callables:
+uploader. Both need the Admin SDK, so `functions/` holds these callables:
 
-| Callable | Removes |
+| Callable | Does |
 |---|---|
-| `deleteAbstractCompletely` | the abstract, its published copy, its reviewer note, its figure |
-| `deleteParticipant` | all of the above for every abstract they own, their profile, their public listing, and their login |
+| `deleteAbstractCompletely` | removes the abstract, its published copy, its reviews, its figure |
+| `deleteParticipant` | all of the above for every abstract they own, plus their profile, their public listing, and their login |
+| `syncDropboxGallery` | lists a Dropbox folder and caches its photographs in `gallery/{year}` — see "Photographs of previous editions" |
+
+The first two are here because they must **bypass the rules**; the third because
+it must **hold a secret the browser cannot**. Those are the only two reasons
+anything belongs in `functions/`. The moment ordinary reads and writes start
+going through callables, the site stops being a static site and every page pays
+cold-start latency for work the rules already secure.
 
 `deleteParticipant` refuses to delete you, and refuses to delete another
 organizer — revoke their admin rights in Settings first. The Participants tab
@@ -107,7 +294,8 @@ than the first line of defence.
 
 **The site works without them.** Every page loads and every other feature works
 if the functions are never deployed; the two delete buttons report that the
-service is missing when pressed. Deploy them with:
+service is missing when pressed, and the Archive page simply shows no
+photographs. Deploy them with:
 
 ```bash
 cd functions && npm install
@@ -156,9 +344,51 @@ first.
 npm install
 npm run vendor      # refresh vendor/ after upgrading marked or dompurify
 npm run serve       # http://127.0.0.1:4173
-npm test            # pure-function unit tests
-npm run test:rules  # Firestore rules tests (needs Java)
+npm test            # pure-function unit tests (142)
+npm run test:rules  # Firestore rules tests (89; needs Java)
 npm run emulators   # Firestore, Auth, Storage and Functions emulators
+```
+
+### Rehearsing against the emulators
+
+Some flows cannot be tried against production without leaving real accounts and
+real abstracts behind — signing up, submitting as a guest, deleting a
+participant. Add `?emulator` to any page, with `npm run emulators` running, and
+the whole SDK talks to the local stack instead:
+
+```
+http://127.0.0.1:4173/submit.html?emulator
+```
+
+The switch is in `js/firebase.js` and is guarded on **localhost AND the query
+parameter**, the same way `js/functions.js` has always guarded its own — so the
+deployed site can never be pointed at a laptop, and an ordinary local page load
+still talks to the real project.
+
+Two things to know. The emulator starts empty, so seed the submission window
+first or every submission is refused (the rules read `config/site` and fail
+closed when it is missing):
+
+```bash
+curl -X PATCH -H "Authorization: Bearer owner" -H "Content-Type: application/json" \
+  "http://127.0.0.1:8080/v1/projects/pints-conference/databases/(default)/documents/config/site" \
+  -d '{"fields":{"submissionsOpen":{"booleanValue":true},
+       "submissionDeadline":{"timestampValue":"2027-01-01T00:00:00Z"},
+       "edition":{"stringValue":"pints2026"}}}'
+```
+
+And no mail is actually sent — the Auth emulator queues it. To see the link a
+submitter would have received:
+
+```bash
+curl -s http://127.0.0.1:9099/emulator/v1/projects/pints-conference/oobCodes
+```
+
+If `emulators:start` reports no Java runtime, Homebrew installed `openjdk`
+keg-only. `npm run test:rules` finds it on its own; this command does not:
+
+```bash
+PATH="/opt/homebrew/opt/openjdk/bin:$PATH" npm run emulators
 ```
 
 `npm test` must pass before every commit.

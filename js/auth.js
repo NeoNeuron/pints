@@ -11,6 +11,8 @@ import {
 } from "https://www.gstatic.com/firebasejs/12.16.0/firebase-auth.js";
 import { doc, getDoc } from "https://www.gstatic.com/firebasejs/12.16.0/firebase-firestore.js";
 import { auth, db, isConfigured } from "./firebase.js";
+import { currentPageFile } from "./nav-utils.mjs";
+import { nextValue, withNext } from "./redirect-utils.mjs";
 
 const persistenceFor = (remember) =>
   setPersistence(auth, remember ? browserLocalPersistence : browserSessionPersistence);
@@ -46,6 +48,44 @@ export async function signUp(email, password, remember) {
     console.error("[pints] sendEmailVerification failed after signup", err);
     return { user, verificationSent: false, error: err };
   }
+}
+
+/**
+ * Create an account for somebody who came to submit an abstract, not to register.
+ *
+ * They never chose a password, so one is generated and thrown away, and they get
+ * a "set your password" email instead of a verification one. That is not a
+ * shortcut: completing a password reset proves the same thing a verification
+ * link proves — that they read mail at this address — and Firebase marks the
+ * address verified when they do. One email, both jobs, and no dead end where
+ * somebody holds an account they cannot sign in to.
+ *
+ * A mail failure is reported, never thrown: the account and the abstract both
+ * exist by then, and treating it as a failed submission would send them back to
+ * submit again and into auth/email-already-in-use.
+ */
+export async function createSubmitterAccount(email) {
+  await persistenceFor(true);
+  const { user } = await createUserWithEmailAndPassword(auth, email, throwawayPassword());
+  try {
+    await sendPasswordResetEmail(auth, email);
+    return { user, passwordEmailSent: true };
+  } catch (err) {
+    console.error("[pints] sendPasswordResetEmail after auto-registration", err);
+    return { user, passwordEmailSent: false, error: err };
+  }
+}
+
+/**
+ * A password nobody will ever type, and nobody keeps.
+ *
+ * From the platform CSPRNG rather than Math.random: it guards the account for
+ * the minutes between creation and the owner setting their own, and during that
+ * window it is the only thing that does.
+ */
+function throwawayPassword() {
+  const bytes = crypto.getRandomValues(new Uint8Array(24));
+  return `Aa1!${btoa(String.fromCharCode(...bytes))}`;
 }
 
 export async function signIn(email, password, remember) {
@@ -97,6 +137,12 @@ export function onUser(callback) {
 /**
  * Resolve with the signed-in user, or redirect to the sign-in page.
  *
+ * The redirect carries where we were as `?next=`, so somebody who followed
+ * "Submit an abstract" from the home page lands back on the abstract form after
+ * signing in or registering rather than on a generic account page with no clue
+ * what they came for. page-login.js and page-register.js validate the value
+ * before following it.
+ *
  * Resolves `null` when Firebase is not configured — callers MUST handle that,
  * or call warnIfUnconfigured() before reaching here. Without this guard the
  * page hangs forever: getAuth() with a placeholder key never fires the callback,
@@ -112,7 +158,10 @@ export function requireUser() {
     const stop = onAuthStateChanged(auth, (user) => {
       stop();
       if (user) resolve(user);
-      else location.replace("login.html");
+      else {
+        location.replace(withNext("login.html",
+          nextValue(currentPageFile(location.pathname), location.hash)));
+      }
     });
   });
 }

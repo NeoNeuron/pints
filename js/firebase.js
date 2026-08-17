@@ -1,6 +1,7 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.16.0/firebase-app.js";
-import { getAuth } from "https://www.gstatic.com/firebasejs/12.16.0/firebase-auth.js";
-import { getFirestore } from "https://www.gstatic.com/firebasejs/12.16.0/firebase-firestore.js";
+import { connectAuthEmulator, getAuth } from "https://www.gstatic.com/firebasejs/12.16.0/firebase-auth.js";
+import { connectFirestoreEmulator, getFirestore } from "https://www.gstatic.com/firebasejs/12.16.0/firebase-firestore.js";
+import { connectStorageEmulator, getStorage } from "https://www.gstatic.com/firebasejs/12.16.0/firebase-storage.js";
 import { firebaseConfig, isConfigured } from "./firebase-config.js";
 
 export { isConfigured };
@@ -8,6 +9,30 @@ export { isConfigured };
 export const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 export const db = getFirestore(app);
+export const storage = getStorage(app);
+
+/**
+ * Point the whole SDK at `firebase emulators:start` when asked.
+ *
+ * Some flows cannot be rehearsed against production without leaving real
+ * accounts and real abstracts behind — signing up, submitting, deleting — so
+ * there has to be somewhere to rehearse them. Guarded exactly like the one in
+ * js/functions.js: localhost AND an explicit `?emulator`, so the deployed site
+ * can never be pointed at a laptop, and an ordinary local page load still talks
+ * to the real project.
+ *
+ * Ports match firebase.json. Run `npm run emulators`, then open
+ * http://127.0.0.1:4173/submit.html?emulator
+ */
+export const usingEmulators = ["localhost", "127.0.0.1"].includes(location.hostname)
+  && new URLSearchParams(location.search).has("emulator");
+
+if (usingEmulators) {
+  connectAuthEmulator(auth, "http://127.0.0.1:9099", { disableWarnings: true });
+  connectFirestoreEmulator(db, "127.0.0.1", 8080);
+  connectStorageEmulator(storage, "127.0.0.1", 9199);
+  console.info("[pints] using the local Firebase emulators");
+}
 
 /**
  * Render a "not configured yet" notice into `host` and return true, when the

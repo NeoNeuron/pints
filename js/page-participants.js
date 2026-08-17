@@ -31,7 +31,7 @@ if (!warnIfUnconfigured(msg)) {
 
     if (!people.length) {
       msg.className = "msg warn";
-      msg.textContent = "No one has opted in to the public list yet.";
+      msg.textContent = "Nobody has registered yet.";
     }
   } catch (err) {
     msg.className = "msg err";

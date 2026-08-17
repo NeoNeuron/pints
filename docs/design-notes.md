@@ -25,8 +25,9 @@ on free hosting with no server and no build step.
 | Poster list with abstracts | `abstracts_public/{uid}`, `abstracts.html` |
 | Markdown standalone pages | `content/*.md` + `js/page-content.js` |
 | Mailing list (bonus) | CSV export only — sending needs a paid plan |
+| Photographs of past editions | `gallery/{year}`, `js/slideshow.js`, `previous.html` (§7.4) |
 
-Roughly 56 unit tests and 58 security-rules tests.
+Roughly 132 unit tests and 88 security-rules tests.
 
 ## 2. The stack, and why
 
@@ -336,9 +337,171 @@ encoded by using the owner's UID as the abstract's document ID. That buys real
 simplification (a direct `get`, no `list` permission on private data, uniqueness
 for free). If a future edition needs multiple submissions per person, move to
 `abstracts/{autoId}` with `allow list: if resource.data.ownerUid == request.auth.uid`
-and queries constrained by `where("ownerUid", "==", uid)`.
+and queries constrained by `where("ownerUid", "==", uid)`. **This has already been
+done once and undone again — read §7.1 before doing it a third time.**
 
-## 7. Open items
+## 7. What changed in August 2026, and why
+
+Written after a second round of work, before the first real submission window.
+
+### 7.1 The abstract id went back to the owner's uid
+
+§6 above records moving *away* from `abstracts/{uid}` to `abstracts/{autoId}` so
+one person could submit several. The organizers then decided one abstract each is
+the rule, and it went back.
+
+The alternative was to keep auto-ids and hide the "new abstract" form once
+somebody had one. That was rejected: the rules are the only authorization
+boundary on this site, and a limit the rules cannot express is a limit anyone
+holding the public API key can ignore. Rules cannot count documents — but they do
+not have to when there is only one slot to write, named by the uid. The rule is
+now true by construction.
+
+What it cost: the account page's editor-arbitration layer went with it (which was
+a gain — it existed only to reconcile several open drafts), and the `list`
+permission on `abstracts` narrowed to organizers, since a participant reads their
+own with a direct `get` and a query could only ever have swept in other people's.
+
+If it moves back to auto-ids a third time, the thing to preserve is the property,
+not the shape: whatever replaces it has to make "one each" checkable by the
+rules, or accept out loud that it is only a UI convention.
+
+### 7.2 The public participant entry waits for verification
+
+Registering used to write `users/{uid}` and `participants_public/{uid}` in one
+batch, because registering *is* the consent and there was nothing to reconcile.
+That is still true — what changed is that consent is not the only question.
+Anyone can type any name and any address into a signup form, and the list is a
+public page. So the private profile is written at registration and the public
+entry when a fresh ID token says the address is confirmed.
+
+The hook is `account.html`, because the verification link already lands there and
+already forces a token refresh for the abstract form's sake. The write is
+idempotent and unconditional on every load, which is what makes a registration
+interrupted between the two writes heal itself rather than needing a repair
+button nobody would find.
+
+### 7.3 Reviews became per organizer, and the shared note became a liability
+
+One free-text note shared by the whole committee could not answer "what does
+everyone think", and it had a real bug: the textarea was filled by an async read
+after the card rendered, and the accept and reject buttons wrote it back on every
+click. Clicking Accept quickly enough saved an empty note over a real one.
+
+Scores and notes are now a map keyed by reviewer uid inside the same document,
+merged rather than set — two organizers reviewing at once would otherwise have
+the last save win silently. Accept and reject no longer touch reviews at all;
+they record who decided and when, and nothing else.
+
+A note with no score counts as a review and does not move the mean. That is not a
+detail: "conflict of interest, abstaining" is a thing organizers write, and
+scoring it as a zero would be worse than not counting it.
+
+### 7.4 The Dropbox sync is the second reason to have a Cloud Function
+
+§3.2c says `functions/` exists for exactly one reason — deletion needs to bypass
+the rules — and warns against letting anything else in. The archive slideshow is
+the first thing admitted since, on a related but distinct ground: it needs a
+credential the browser must not hold. A Dropbox shared folder cannot be listed
+without an `Authorization` header, and §3.2b is the record of what happened last
+time a token lived in a text box in the browser.
+
+The shape that keeps this from becoming a server: the callable runs only when an
+organizer presses Sync, and it *writes to Firestore*. Visitors read the cached
+document. Nobody's page load calls a function, and the Archive page is unchanged
+if the function is never deployed.
+
+The test for admission to `functions/` is now two questions, not one — does it
+need to bypass the rules, or hold a secret? — and both are narrow on purpose.
+
+### 7.5 The verification gate moved from submitting to being listed
+
+§4.2 records email verification as a launch blocker: Firebase sends from
+`noreply@<project>.firebaseapp.com`, institutional filters quarantine it, and an
+`@ens.psl.eu` address never received the message in testing. The response at the
+time was to document it and exempt organizers.
+
+It is now fixed by moving the gate rather than the mail. Submitting an abstract
+requires only that you are signed in and own the document; the **public
+participant list** is what waits for a verified address. That is where the gate
+belongs: an unproven address on a public page is the actual harm, whereas an
+unproven address on a submission is a problem the organizers were always going to
+notice when they read it.
+
+The change also made "submit without an account" possible at all. An account
+created during submission is seconds old and cannot be verified, so any design
+where the write needs `isVerified()` cannot accept a first-time submitter.
+
+What still stands between `abstracts` and the open internet: an account per
+submission, one abstract per account (the uid key from §7.1), the submission
+window, and a required figure. That is a weaker barrier than before, deliberately,
+and it is worth naming as such rather than discovering later that it changed.
+
+### 7.6 Registering happens before the write, not after
+
+The ask was "let people submit without logging in, and register them afterwards".
+Afterwards is impossible: `firestore.rules` keys the abstract on the owner's uid
+and `storage.rules` keys the figure on the uploader's, so there is no uid to
+write under until an account exists. The only alternatives were to open
+`abstracts` to unauthenticated writes — handing the collection to anyone with the
+public API key — or to proxy the write through a Cloud Function, which would put
+ordinary writes behind a server and undo the property §3.2c exists to protect.
+
+So the account is created a moment *before* the write. From the form it is
+invisible: you fill it in, press Submit, and you have both an abstract and an
+account. `mountAbstractForm` takes an `ensureAccount` callback and resolves the
+uid at save time rather than at mount, which is the whole mechanism.
+
+Two consequences worth keeping:
+
+- **Nothing irreversible happens until the form is valid.** Account creation runs
+  after validation, never before, so a half-filled form leaves no orphan account
+  behind. The pure validator gained `validateSubmitter` so the submitter's
+  details fail in the same list as the abstract's.
+- **The submitter never chooses a password.** One is generated and discarded, and
+  they get a "set your password" email rather than a verification one —
+  completing a password reset proves the same thing and Firebase marks the
+  address verified when they do. One email doing both jobs, and no account
+  nobody can sign in to.
+
+### 7.7 The one moment a first-time submitter is paying attention
+
+A guest submission does two things, and only one of them finishes: the abstract
+is stored, and an account is created whose email has not been opened. Everything
+that is still missing — a password, a verified address, a place on the
+participant list — is behind that email.
+
+The first cut reported it as a status line, which was immediately overwritten by
+"Abstract received" a second later. That is worth recording because it is the
+generic version of a mistake this codebase has made before (§7.3): a message
+element shared between two things that happen close together will lose one of
+them. The fix is the same both times — give the thing that must persist its own
+element.
+
+It is now a panel rather than a line, it names the sending domain, and it carries
+its own resend button. Not a link to somewhere they can resend from: the moment
+somebody notices the mail never arrived is right then, not on a later visit to a
+page they do not know exists.
+
+### 7.8 `?emulator` on any page
+
+Guest submission could not be rehearsed. Trying it against production meant a
+real account and a real abstract to clean up afterwards, and the failure modes
+that matter — a first-time submitter, an address already taken, a bounced mail —
+are all ones you only find by running them.
+
+`js/firebase.js` now points Auth, Firestore and Storage at the local emulators
+when a page is loaded with `?emulator`, guarded on localhost as well, exactly as
+`js/functions.js` had always guarded its own. It found a real bug within minutes
+(the shared `#msg` above), which is the argument for it.
+
+One wrinkle worth writing down: the emulator starts with no `config/site`, and
+`submissionWindowOpen()` calls `get()` on it. A missing document makes the rule
+error, and an erroring rule fails closed — so every submission is refused with no
+obvious cause until you seed it. That is the *desired* behaviour in production
+(§4.1) and a confusing first five minutes locally. The README gives the curl.
+
+## 8. Open items
 
 - **Restrict the web API key** and enable App Check (§3.4). Free, console-only.
 - **Verify email deliverability from an institutional address** after any sender

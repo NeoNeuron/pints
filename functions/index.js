@@ -11,6 +11,17 @@
 //     of admin uids into the rules, figure deletion happens here, where the
 //     Admin SDK ignores rules entirely.
 //
+// The archive gallery sync is here for a related but distinct reason: it needs
+// a Dropbox credential. A shared folder cannot be listed without one, the site
+// is a static page with nowhere safe to keep it, and the last time a token lived
+// in the browser the organizers asked for the feature to be removed. So the
+// token stays server-side, the result is cached in Firestore, and visitors never
+// call this at all.
+//
+// The test for whether something belongs in this file is narrow — does it need
+// to bypass the rules, or hold a secret the browser must not? Ordinary reads and
+// writes belong in firestore.rules, or the site stops being a static site.
+//
 // Because the Admin SDK ignores rules, EVERY function below must check the
 // caller itself. A callable's request.auth is set by the platform from a
 // verified ID token and is trustworthy; nothing the client says about itself is.
@@ -20,6 +31,7 @@ import { getAuth } from "firebase-admin/auth";
 import { getFirestore } from "firebase-admin/firestore";
 import { getStorage } from "firebase-admin/storage";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
+import { defineSecret } from "firebase-functions/params";
 import { logger } from "firebase-functions";
 
 initializeApp();
@@ -120,3 +132,150 @@ export const deleteParticipant = onCall({ region: REGION }, async (request) => {
   logger.info("participant deleted", { uid, by: adminUid, abstracts: owned.size });
   return { deleted: true, abstracts: owned.size };
 });
+
+// --------------------------------------------------------------- the archive
+
+// Set with `firebase functions:secrets:set DROPBOX_APP_KEY` (and the other two).
+// A refresh token rather than an access token: Dropbox access tokens expire
+// after four hours, which would mean re-pasting one before every sync.
+const DROPBOX_APP_KEY = defineSecret("DROPBOX_APP_KEY");
+const DROPBOX_APP_SECRET = defineSecret("DROPBOX_APP_SECRET");
+const DROPBOX_REFRESH_TOKEN = defineSecret("DROPBOX_REFRESH_TOKEN");
+
+const IMAGE_EXTENSIONS = /\.(jpe?g|png|webp|gif)$/i;
+
+/** Trade the long-lived refresh token for an access token good for this call. */
+async function dropboxAccessToken() {
+  const body = new URLSearchParams({
+    grant_type: "refresh_token",
+    refresh_token: DROPBOX_REFRESH_TOKEN.value(),
+  });
+  const auth = Buffer.from(
+    `${DROPBOX_APP_KEY.value()}:${DROPBOX_APP_SECRET.value()}`).toString("base64");
+
+  const res = await fetch("https://api.dropbox.com/oauth2/token", {
+    method: "POST",
+    headers: {
+      Authorization: `Basic ${auth}`,
+      "Content-Type": "application/x-www-form-urlencoded",
+    },
+    body,
+  });
+  if (!res.ok) {
+    logger.error("dropbox token exchange failed", { status: res.status, body: await res.text() });
+    throw new HttpsError("failed-precondition",
+      "Dropbox rejected the stored credentials. An organizer needs to re-authorize the app.");
+  }
+  return (await res.json()).access_token;
+}
+
+async function dropbox(endpoint, token, payload) {
+  const res = await fetch(`https://api.dropboxapi.com/2/${endpoint}`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    logger.error("dropbox call failed", { endpoint, status: res.status, body: text });
+    // 409 is Dropbox's "your request was well-formed but wrong" — almost always
+    // a link that is not shared, or not a folder. Worth saying out loud.
+    if (res.status === 409) {
+      throw new HttpsError("failed-precondition",
+        "Dropbox could not open that link. Check it is a shared folder link with "
+        + "\u201cAnyone with the link\u201d access.");
+    }
+    throw new HttpsError("internal", "Dropbox refused the request.");
+  }
+  return res.json();
+}
+
+/**
+ * A direct-image URL for one file inside a shared folder.
+ *
+ * `?raw=1` is the difference between an image and Dropbox's HTML preview page:
+ * without it an <img> tag loads a web page and shows a broken icon. The metadata
+ * call is what turns "a file inside that folder" into its own shared link.
+ */
+async function directUrl(token, folderUrl, name) {
+  const meta = await dropbox("sharing/get_shared_link_metadata", token, {
+    url: folderUrl,
+    path: `/${name}`,
+  });
+  const raw = String(meta?.url ?? "");
+  if (!raw) return null;
+  // Parsed rather than string-spliced: the link may arrive with dl=0, with
+  // rlkey and no dl, or with no query at all, and hand-rolled rewriting of all
+  // three is exactly the kind of thing that silently produces "...jpg&raw=1".
+  const url = new URL(raw);
+  url.searchParams.delete("dl");
+  url.searchParams.set("raw", "1");
+  return url.href;
+}
+
+/**
+ * Cache a Dropbox folder's photographs into gallery/{year}.
+ *
+ * Captions are kept by file name across syncs — an organizer who writes twenty
+ * captions and then adds one photograph must not lose the twenty.
+ */
+export const syncDropboxGallery = onCall(
+  { region: REGION, secrets: [DROPBOX_APP_KEY, DROPBOX_APP_SECRET, DROPBOX_REFRESH_TOKEN] },
+  async (request) => {
+    const adminUid = await requireAdmin(request);
+    const year = Number(request.data?.year);
+    const folderUrl = String(request.data?.folderUrl ?? "").trim();
+    if (!Number.isInteger(year) || year < 2000 || year > 2100) {
+      throw new HttpsError("invalid-argument", "A four-digit year is required.");
+    }
+    if (!/^https:\/\/(www\.)?dropbox\.com\//.test(folderUrl)) {
+      throw new HttpsError("invalid-argument", "That does not look like a Dropbox link.");
+    }
+
+    const token = await dropboxAccessToken();
+
+    const names = [];
+    let page = await dropbox("sharing/list_shared_link_files", token, { url: folderUrl });
+    for (;;) {
+      for (const entry of page.entries ?? []) {
+        if (entry[".tag"] === "file" && IMAGE_EXTENSIONS.test(entry.name ?? "")) {
+          names.push(entry.name);
+        }
+      }
+      if (!page.has_more) break;
+      page = await dropbox("sharing/list_shared_link_files/continue", token,
+        { cursor: page.cursor });
+    }
+
+    // A hard cap, matching firestore.rules. Somebody pointing this at a folder
+    // of a thousand photographs should be told, not silently truncated at a
+    // number the rules happen to enforce.
+    if (names.length > 200) {
+      throw new HttpsError("failed-precondition",
+        `That folder holds ${names.length} images; the gallery takes at most 200.`);
+    }
+
+    names.sort((a, b) => a.localeCompare(b, "en", { numeric: true }));
+
+    const existing = (await db.doc(`gallery/${year}`).get()).data() ?? {};
+    const captions = new Map(
+      (existing.photos ?? []).map((photo) => [photo?.name, photo?.caption ?? ""]));
+
+    const photos = [];
+    for (const name of names) {
+      const url = await directUrl(token, folderUrl, name);
+      if (url) photos.push({ name, url, caption: captions.get(name) ?? "" });
+    }
+
+    await db.doc(`gallery/${year}`).set({
+      year,
+      folderUrl,
+      photos,
+      syncedAt: new Date(),
+      syncedBy: adminUid,
+    });
+
+    logger.info("gallery synced", { year, photos: photos.length, by: adminUid });
+    return { year, photos: photos.length, skipped: names.length - photos.length };
+  },
+);
