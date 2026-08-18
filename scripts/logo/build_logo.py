@@ -16,7 +16,13 @@ import textpaths as tp
 HERE = Path(__file__).parent
 ASSETS = HERE / ".." / ".." / "assets"
 
-BRAIN = "#e2574c"
+# The brain on the "i" is the one recolour, and it tracks --accent in
+# css/styles.css: it sits directly above the hero's buttons, so any other hue
+# reads as a second accent colour rather than as part of the same identity.
+# Keep the two in step by hand -- an SVG cannot read a CSS custom property,
+# and inlining the mark to make it themeable would put a 46KB blob in every
+# page just to share one hex value.
+BRAIN = "#7b1e3a"
 GREY = "#808080"
 DATE = ["November 6th, 2026", "Daniel Cohen Amphitheater, ENS", "48 Bd Jourdan, 75014 Paris"]
 
