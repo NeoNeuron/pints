@@ -49,25 +49,32 @@ test("a participant has exactly one slot, and it is named by their uid", async (
   await assertFails(setDoc(doc(fs, "abstracts", "bob"), abstract()));
 });
 
-// Deliberate, and a change from the first version of these rules. Submitting
-// without an account creates one a moment before the write, so the submitter is
-// never verified at that point; and institutional mail filters quarantine the
-// verification message often enough that gating on it locked real people out.
-// The public participant list still waits for a verified address — see
-// participants.rules.test.mjs — which is where an unproven one would do harm.
-test("an unverified user CAN submit; the address is proved by the mail we send", async () => {
+// Register first, then submit. This is the gate the whole flow is built around:
+// the home page sends a signed-out visitor to sign in, and submit.html shows a
+// "confirm your address" panel instead of the form. Checked here because none of
+// that is an authorization boundary — this is.
+test("an unverified user cannot submit, or revise", async () => {
   await seedConfig(env);
   const fs = asUser(env, "alice", { verified: false });
-  await assertSucceeds(setDoc(doc(fs, "abstracts", "alice"), abstract()));
-  await assertSucceeds(setDoc(doc(fs, "abstracts", "alice"), abstract({ title: "Revised" })));
+  await assertFails(setDoc(doc(fs, "abstracts", "alice"), abstract()));
+
+  await seed(env, (db) => setDoc(doc(db, "abstracts", "alice"), abstract()));
+  await assertFails(setDoc(doc(fs, "abstracts", "alice"), abstract({ title: "Revised" })));
 });
 
-// What replaced verification as the thing standing between the submission pile
-// and the open internet: you still need an account, and it still has to be yours.
-test("an unverified user still cannot submit as somebody else", async () => {
+test("an unverified user cannot submit as somebody else either", async () => {
   await seedConfig(env);
   const fs = asUser(env, "alice", { verified: false });
   await assertFails(setDoc(doc(fs, "abstracts", "bob"), abstract({ ownerUid: "bob" })));
+});
+
+// Reading is not gated on it: somebody whose address lapsed still gets to see
+// what is on file, which is what submit.html shows them behind the panel.
+test("an unverified owner can still read their own abstract", async () => {
+  await seedConfig(env);
+  await seed(env, (db) => setDoc(doc(db, "abstracts", "alice"), abstract()));
+  const fs = asUser(env, "alice", { verified: false });
+  await assertSucceeds(getDoc(doc(fs, "abstracts", "alice")));
 });
 
 test("an anonymous visitor cannot submit", async () => {

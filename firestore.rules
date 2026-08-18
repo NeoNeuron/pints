@@ -19,6 +19,10 @@ service cloud.firestore {
 
     function isOwner(uid) { return isSignedIn() && request.auth.uid == uid; }
 
+    function isVerified() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
     function isAdmin() {
       return isSignedIn()
         && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
@@ -158,17 +162,15 @@ service cloud.firestore {
       allow get: if isOwner(uid) || isAdmin();
       allow list: if isAdmin();
 
-      // Signed in and the owner, NOT verified. Submitting used to require a
-      // verified address and that gate was wrong twice over: institutional mail
-      // filters quarantine the verification message (measured, see the README),
-      // and somebody submitting without an account first is never verified —
-      // their account is seconds old. What an unproven address would actually
-      // harm is the PUBLIC participant list, and that still waits for it.
+      // Register first, then submit: a confirmed address, the owner, and an open
+      // window. Verification is the gate the site's flow is built around —
+      // submit.html will not even mount the form without it — and it is checked
+      // here because the UI is not an authorization boundary.
       //
-      // What still stands between this and the open internet: a Firebase account
-      // per submission, one abstract per account, the submission window, and a
-      // figure. The address is proved by the "set your password" mail we send.
-      allow create: if isSignedIn() && submissionWindowOpen()
+      // Institutional mail filters do quarantine the verification message often
+      // enough to matter (measured, see the README), so every page that can hit
+      // this rule carries a resend button rather than leaving people stuck.
+      allow create: if isVerified() && submissionWindowOpen()
         && isOwner(uid)
         && validAbstract(request.resource.data, uid)
         && request.resource.data.status == 'submitted';
@@ -184,7 +186,7 @@ service cloud.firestore {
       // it, and dropping it from this list would freeze that document out of
       // its owner's hands forever. Only the PREVIOUS status is tolerated; the
       // line below still pins what may be written.
-      allow update: if isSignedIn() && submissionWindowOpen()
+      allow update: if isVerified() && submissionWindowOpen()
         && isOwner(uid)
         && resource.data.status in ['submitted', 'rejected', 'withdrawn']
         && request.resource.data.status == 'submitted'

@@ -27,7 +27,7 @@ on free hosting with no server and no build step.
 | Mailing list (bonus) | CSV export only — sending needs a paid plan |
 | Photographs of past editions | `gallery/{year}`, `js/slideshow.js`, `previous.html` (§7.4) |
 
-Roughly 132 unit tests and 88 security-rules tests.
+Roughly 174 unit tests and 94 security-rules tests.
 
 ## 2. The stack, and why
 
@@ -416,6 +416,8 @@ need to bypass the rules, or hold a secret? — and both are narrow on purpose.
 
 ### 7.5 The verification gate moved from submitting to being listed
 
+**Superseded by §7.21 — the gate is back on submitting. Kept for the reasoning.**
+
 §4.2 records email verification as a launch blocker: Firebase sends from
 `noreply@<project>.firebaseapp.com`, institutional filters quarantine it, and an
 `@ens.psl.eu` address never received the message in testing. The response at the
@@ -438,6 +440,9 @@ window, and a required figure. That is a weaker barrier than before, deliberatel
 and it is worth naming as such rather than discovering later that it changed.
 
 ### 7.6 Registering happens before the write, not after
+
+**Superseded by §7.21 — guest submission was removed. Kept because the mechanism
+is the hard part, and this is where it is written down.**
 
 The ask was "let people submit without logging in, and register them afterwards".
 Afterwards is impossible: `firestore.rules` keys the abstract on the owner's uid
@@ -466,6 +471,9 @@ Two consequences worth keeping:
 
 ### 7.7 The one moment a first-time submitter is paying attention
 
+**Partly superseded by §7.21: the panel survives, on `submit.html`, as the
+unconfirmed-address stop. The guest submission it originally reported is gone.**
+
 A guest submission does two things, and only one of them finishes: the abstract
 is stored, and an account is created whose email has not been opened. Everything
 that is still missing — a password, a verified address, a place on the
@@ -485,7 +493,8 @@ page they do not know exists.
 
 ### 7.8 `?emulator` on any page
 
-Guest submission could not be rehearsed. Trying it against production meant a
+Guest submission could not be rehearsed (it is gone — §7.21 — but the tooling it
+forced is the lasting part). Trying it against production meant a
 real account and a real abstract to clean up afterwards, and the failure modes
 that matter — a first-time submitter, an address already taken, a bounced mail —
 are all ones you only find by running them.
@@ -827,6 +836,44 @@ actually rated worst is buried underneath them. Null is not a small number.
 Ties break on title, which matters more here than it looks: this list re-renders
 after every action, and an unstable comparator would shuffle rows under the
 cursor between one click and the next.
+
+### 7.21 The verification gate moved back to submitting — and why that is not a loop
+
+§7.5 moved the gate off submitting and onto the participant list, and §7.6 built
+guest submission on top of that. Both are now reversed: `submit.html` requires a
+signed-in account with a confirmed address, and `firestore.rules` requires
+`isVerified()` on `abstracts` create and update again.
+
+This is a **product decision, not a correction of §7.5.** The reasoning in §7.5
+still holds on its own terms — an unproven address does more harm on a public
+page than on a submission — but it optimised for the wrong thing. What guest
+submission bought was one fewer step before the form. What it cost was a pile of
+abstracts attached to accounts nobody had ever opened the mail for: no password,
+no verified address, no participant listing, and no reliable way to reach the
+submitter about the abstract they had just sent. The organizers reach people by
+email, so an address the site has never proved is not a detail.
+
+Read §7.5 and §7.6 as the record of *why the mechanism was possible*, not as
+advice to rebuild it. If it comes back, the two things that made it work are
+still the hard parts: an account must exist before the write (the uid keys both
+the document and the figure path — §7.6 first paragraph), and the "set your
+password" mail is what proves the address in one message instead of two.
+
+Three things carried forward from that period rather than being reverted:
+
+- **The abstract id is still the owner's uid** (§7.1). That is orthogonal to who
+  may write it.
+- **The panel, not the status line** (§7.7). The unconfirmed-address stop on
+  `submit.html` is a panel with its own resend button, for exactly the reason
+  §7.7 gives: the moment somebody discovers the mail never arrived is right then.
+  It is now shown *instead of* the form rather than after a successful save.
+- **The token refresh** (`refreshVerification()`). Now that a real gate depends
+  on `email_verified` again, the stale-token problem in §4.2 is live again too —
+  every page that mounts the form refreshes before deciding anything.
+
+`validateSubmitter`, `looksLikeEmail`, `createSubmitterAccount` and the form's
+"Your details" fieldset went with the flow that needed them. They are in the
+history if the decision reverses a third time.
 
 ## 8. Open items
 

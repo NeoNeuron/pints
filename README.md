@@ -26,8 +26,8 @@ paid Firebase plan; the CSV export stands in for it.
   is no opt-in, and no button. See "Registering and being listed".
 - **Abstracts** — **one per participant**, with a topic (cognitive / systems /
   computational), a **required figure and caption**, a live preview, and an
-  opt-out from being considered for a talk. **No account needed to submit** —
-  `submit.html` creates one from the email on the form. Admin review with a
+  opt-out from being considered for a talk. **Register first, then submit** —
+  `submit.html` needs a signed-in account with a confirmed address. Admin review with a
   per-organizer 1–10 score and private note, filters (text, status, talk/poster,
   talk opt-out, topic), two CSV exports, poster-vs-talk assignment, poster
   numbering, accept/reject/unpublish. Public list with search and a topic filter.
@@ -50,7 +50,7 @@ paid Firebase plan; the CSV export stands in for it.
   affiliation, edit any abstract at any status, and delete an abstract or a
   participant outright. See "Editing and deleting as an organizer".
 
-89 security-rules tests and 142 unit tests cover this.
+94 security-rules tests and 174 unit tests cover this.
 
 ### Deploying rules — order matters
 
@@ -83,17 +83,10 @@ between the two writes heals itself the next time the person opens their account
 
 ### Being listed without ever loading account.html
 
-Two routes skip that hook entirely: opening the verification link on a device
-where you are not signed in (the page redirects to sign-in and the write never
-happens), and submitting an abstract without registering — those people get a
-"set your password" mail rather than a verification one.
+One route skips that hook: opening the verification link on a device where you
+are not signed in. The page redirects to sign-in and the write never happens.
 
-The second of those is narrowed as far as it can be: the reset mail carries a
-continue URL of `login.html?next=account.html`, so finishing it drops them on
-the sign-in page and signing in publishes them at once. It still does not close
-the gap, because nothing obliges them to sign in there.
-
-Neither can be fixed in the browser, because `participants_public` may be
+It cannot be fixed in the browser, because `participants_public` may be
 written only by its owner or an organizer and the person in question is signed
 in nowhere. So `backfillParticipants` in `functions/` sweeps up the difference:
 every five minutes it compares verified Firebase Auth accounts against the
@@ -110,7 +103,7 @@ lagging, that is the number to look at.
 
 `login.html` is sign-in and password reset only. Both pages carry a `?next=`
 target through registration, so "Submit an abstract" on the home page brings a
-signed-out visitor back to `account.html#abstract` once they have an account.
+signed-out visitor back to `submit.html` once they have an account.
 `js/redirect-utils.mjs` validates that target against a deliberately narrow
 pattern — one page of this site, optionally with a fragment — so the parameter
 cannot be turned into an open redirect.
@@ -183,50 +176,53 @@ in review resolves for its author and for nobody else, which is worse than no
 link. For the same reason an unknown id and an unaccepted one give the same
 answer — saying which would leak a decision that is not the site's to announce.
 
-### Submitting without an account
+### Register first, then submit
 
-`submit.html` works signed out. The form carries a "Your details" block — name,
-affiliation, **email, all required** — and on save it creates a Firebase account
-from them a moment *before* writing the abstract.
+`submit.html` is behind two gates, in that order, and both are real rather than
+decorative.
 
-**Before, not after, and that is forced.** `firestore.rules` keys the abstract on
+**Signed out → sign in.** `requireUser()` redirects to
+`login.html?next=submit.html`, so somebody who followed the home page's "Submit
+an abstract" button lands back on the form once they have an account, rather than
+on a generic account page with no clue what they came for. The home button itself
+is rewritten to that sign-in URL as soon as Firebase resolves auth state; the
+static `href` stays `submit.html`, which is the right destination for everybody
+else and the right fallback for a click that beats the rewrite, since
+`submit.html` redirects to exactly the same place.
+
+**Signed in but unconfirmed → confirm.** The form is not mounted at all. A panel
+says so, names the address, warns that the sender is a `firebaseapp.com` domain
+that university filters quarantine, and carries its own **resend** button and an
+**I have confirmed it** button that reloads. The moment somebody discovers the
+mail never arrived is right there on the page they came to use, not on a later
+visit to `account.html`.
+
+There is no "Your details" block on the form any more. Name, affiliation and
+email belong to the account by the time anyone reaches it, and the profile is
+edited on `account.html`. What the form does still take from the profile is the
+seed for the first author row and the affiliations box.
+
+**Why the account has to exist first.** `firestore.rules` keys the abstract on
 the owner's uid and `storage.rules` keys the figure on the uploader's, so an
 unauthenticated visitor cannot write either; opening those up would hand the
-collection to anyone holding the public API key. Creating the account first is
-what lets the rules stay the only authorization boundary while the person filling
-the form never sees a signup step.
+collection to anyone holding the public API key.
 
-They never choose a password, so a random one is generated and discarded and they
-get a **"set your password" email** instead of a verification one. That is not a
-shortcut: completing a password reset proves the same thing a verification link
-proves, and Firebase marks the address verified when they do. One email, both
-jobs, no dead end where somebody holds an account they cannot sign in to.
+**Verification is enforced in the rules, not just the UI.** `allow create` and
+`allow update` on `abstracts/{uid}` require `isVerified()`, i.e.
+`request.auth.token.email_verified`. `js/abstract-form.js` mirrors it — an
+unconfirmed address renders the form read-only with a notice rather than letting
+somebody fill it in and collect a `PERMISSION_DENIED` on the last click — and
+organizers are exempt from both, because `allow write: if isAdmin()` already
+covers them.
 
-A signed-in submitter sees the same block with their **login email filled in and
-read-only** — the address belongs to the login, and a second editable copy would
-leave the two disagreeing about who they are.
+That token is refreshed (`refreshVerification()`) before either page decides
+anything on it: clicking the verification link does **not** update the token a
+tab already holds, and it stays false for up to an hour. A stale token is what
+used to make a first submission fail and then "fix itself" later.
 
-If the address already has an account, the form says so and offers a sign-in
-link. Nothing navigates away, so signing in in another tab picks up here — the
-page re-renders on auth state — and the draft is still on screen. No account and
-no abstract are created in that case: account creation runs only after the whole
-form validates, and the abstract write only after the account exists.
-
-**When the submission lands, a panel says to go and check the email**, names the
-address it went to, warns that the sender is a `firebaseapp.com` domain that
-university filters quarantine, and carries its own resend button. That moment is
-the only one where the person is definitely still paying attention, and until
-they open the mail they have no password, no verified address, and no place on
-the participant list.
-
-**Submitting no longer requires a verified email address.** That gate was the
-wrong shape twice over: institutional mail filters quarantine the verification
-message (measured — see "Verification emails and institutional mail filters"),
-and a just-created account is never verified. What still stands between the
-submission pile and the open internet is an account per submission, one abstract
-per account, the submission window, and a required figure. What an unproven
-address would actually harm is the **public participant list**, and that still
-waits for verification.
+**Reading is never gated.** An abstract already on file is shown whatever the
+address's state — the card, the status, the share link if it is accepted. It is
+the editor behind it that closes.
 
 ## Reviewing abstracts
 
@@ -503,15 +499,15 @@ first.
 npm install
 npm run vendor      # refresh vendor/ after upgrading marked or dompurify
 npm run serve       # http://127.0.0.1:4173
-npm test            # pure-function unit tests (142)
-npm run test:rules  # Firestore rules tests (89; needs Java)
+npm test            # pure-function unit tests (174)
+npm run test:rules  # Firestore rules tests (94; needs Java)
 npm run emulators   # Firestore, Auth, Storage and Functions emulators
 ```
 
 ### Rehearsing against the emulators
 
 Some flows cannot be tried against production without leaving real accounts and
-real abstracts behind — signing up, submitting as a guest, deleting a
+real abstracts behind — signing up, verifying an address, submitting, deleting a
 participant. Add `?emulator` to any page, with `npm run emulators` running, and
 the whole SDK talks to the local stack instead:
 
@@ -631,7 +627,7 @@ and it must not be hidden:
   whether it is public — and it would force a build step this project
   deliberately does not have.
 - **It does not grant access.** It identifies the project. Authorization is
-  `firestore.rules`, covered by 58 emulator tests and verified against
+  `firestore.rules`, covered by 94 emulator tests and verified against
   production: an anonymous caller holding this exact key gets
   `PERMISSION_DENIED` on `users`, `admins`, `abstracts`, and `abstract_reviews`,
   and can read only what is public by design.
@@ -700,8 +696,9 @@ and it will vary institution by institution.
 
 Two mitigations are already in place:
 
-- The unverified banner on `account.html` names the cause and points at the spam
-  or quarantine folder, and shows the error code if a resend fails.
+- The unverified banner on `account.html` and the panel that replaces the form on
+  `submit.html` both name the cause, point at the spam or quarantine folder,
+  carry a resend button, and show the error code if a resend fails.
 - Organizers are exempt from the gate, because `firestore.rules` already grants
   admins `allow write: if isAdmin()` on abstracts. An organizer is never locked
   out of their own submission by undelivered mail.

@@ -30,22 +30,6 @@ const returnToAccount = () => ({
 export const sendVerification = (user) => sendEmailVerification(user, returnToAccount());
 
 /**
- * Where Firebase sends a submitter after they set their password.
- *
- * The reset link is what verifies their address, and finishing it is the moment
- * they should join the participant list. Without a continue URL they stop on a
- * Firebase-hosted "password changed" page and the list waits for the five-minute
- * backfill sweep instead. They are not signed in at that point — completing a
- * reset proves the address, it does not open a session — so the target is the
- * sign-in page carrying `next`, and account.html publishes them the moment they
- * arrive.
- */
-const returnToSignIn = () => ({
-  url: new URL(withNext("login.html", "account.html"), location.href).href,
-  handleCodeInApp: false,
-});
-
-/**
  * Create the account, then try to send the verification email.
  *
  * A mail failure must NOT look like a signup failure: the account already
@@ -64,44 +48,6 @@ export async function signUp(email, password, remember) {
     console.error("[pints] sendEmailVerification failed after signup", err);
     return { user, verificationSent: false, error: err };
   }
-}
-
-/**
- * Create an account for somebody who came to submit an abstract, not to register.
- *
- * They never chose a password, so one is generated and thrown away, and they get
- * a "set your password" email instead of a verification one. That is not a
- * shortcut: completing a password reset proves the same thing a verification
- * link proves — that they read mail at this address — and Firebase marks the
- * address verified when they do. One email, both jobs, and no dead end where
- * somebody holds an account they cannot sign in to.
- *
- * A mail failure is reported, never thrown: the account and the abstract both
- * exist by then, and treating it as a failed submission would send them back to
- * submit again and into auth/email-already-in-use.
- */
-export async function createSubmitterAccount(email) {
-  await persistenceFor(true);
-  const { user } = await createUserWithEmailAndPassword(auth, email, throwawayPassword());
-  try {
-    await sendPasswordResetEmail(auth, email, returnToSignIn());
-    return { user, passwordEmailSent: true };
-  } catch (err) {
-    console.error("[pints] sendPasswordResetEmail after auto-registration", err);
-    return { user, passwordEmailSent: false, error: err };
-  }
-}
-
-/**
- * A password nobody will ever type, and nobody keeps.
- *
- * From the platform CSPRNG rather than Math.random: it guards the account for
- * the minutes between creation and the owner setting their own, and during that
- * window it is the only thing that does.
- */
-function throwawayPassword() {
-  const bytes = crypto.getRandomValues(new Uint8Array(24));
-  return `Aa1!${btoa(String.fromCharCode(...bytes))}`;
 }
 
 export async function signIn(email, password, remember) {

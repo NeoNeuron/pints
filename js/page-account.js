@@ -40,10 +40,10 @@ if (warnIfUnconfigured(msg)) {
     explain.style.margin = "0 0 .5rem";
     explain.textContent =
       "Your email address is not confirmed yet, so your name is not on the "
-      + "participant list. It goes on automatically the moment you click the "
-      + "link — you can submit an abstract either way. The message comes from a "
-      + "firebaseapp.com address, so check your spam or quarantine folder: some "
-      + "university mail servers hold it there.";
+      + "participant list and you cannot submit an abstract. Both open up the "
+      + "moment you click the link. The message comes from a firebaseapp.com "
+      + "address, so check your spam or quarantine folder: some university mail "
+      + "servers hold it there.";
 
     const again = document.createElement("button");
     again.type = "button";
@@ -117,8 +117,9 @@ if (warnIfUnconfigured(msg)) {
  * and the blank form waits behind a closed <details>. The disclosure stays for
  * the second case because submitting is optional and most registrations never
  * will — no reason to make everyone pay for the form or its config read — and
- * because it is what `account.html#abstract` opens when somebody arrives from
- * the "Submit an abstract" button on the home page.
+ * because `account.html#abstract` opens it for anyone who arrives on that
+ * anchor. The home page's "Submit an abstract" button points at submit.html,
+ * which is the same editor with the same rules behind it.
  *
  * Everything that used to arbitrate between several open editors is gone with
  * the second abstract that made it necessary.

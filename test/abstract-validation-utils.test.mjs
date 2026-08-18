@@ -1,11 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
-  looksLikeEmail,
   parseAffiliationIndexes,
   parseAffiliations,
   validateAbstract,
-  validateSubmitter,
 } from "../js/abstract-validation-utils.mjs";
 
 const good = (over = {}) => ({
@@ -148,63 +146,4 @@ test("a caption longer than the limit is rejected", () => {
   assert.ok(errors.some((e) => e.includes("300 characters or fewer")));
 
   assert.equal(validateAbstract(good({ figureCaption: "x".repeat(300) }), openNow).valid, true);
-});
-
-// ------------------------------------------------- submitting without an account
-
-test("looksLikeEmail accepts the addresses academics actually use", () => {
-  for (const good of [
-    "alice@ens.psl.eu",
-    "a.b-c+tag@sub.domain.ac.uk",
-    "ludwig.hruza@ens.psl.eu",
-  ]) assert.equal(looksLikeEmail(good), true, good);
-});
-
-test("looksLikeEmail rejects what is plainly not an address", () => {
-  for (const bad of [
-    "alice", "alice@", "@ens.psl.eu", "alice@ens", "alice ens.psl.eu",
-    "alice@ens .eu", "", null, undefined,
-  ]) assert.equal(looksLikeEmail(bad), false, String(bad));
-});
-
-const submitter = (over = {}) => ({
-  displayName: "Alice Dupont",
-  affiliation: "ENS",
-  email: "alice@ens.psl.eu",
-  ...over,
-});
-
-test("a complete submitter validates", () => {
-  assert.deepEqual(validateSubmitter(submitter()), { valid: true, errors: [] });
-});
-
-test("name, affiliation and email are all required", () => {
-  const { valid, errors } = validateSubmitter({});
-  assert.equal(valid, false);
-  assert.deepEqual(errors, [
-    "Your full name is required.",
-    "Your affiliation is required.",
-    "Your email address is required.",
-  ]);
-});
-
-test("whitespace is not a name, an affiliation, or an address", () => {
-  const { errors } = validateSubmitter(submitter({
-    displayName: "  ", affiliation: "\t", email: "   ",
-  }));
-  assert.equal(errors.length, 3);
-});
-
-test("a bad address is reported as bad, not as missing", () => {
-  const { errors } = validateSubmitter(submitter({ email: "alice-at-ens" }));
-  assert.deepEqual(errors, ["That does not look like a valid email address."]);
-});
-
-test("submitter fields respect the same limits as the profile", () => {
-  assert.equal(validateSubmitter(submitter({ displayName: "x".repeat(80) })).valid, true);
-  assert.ok(validateSubmitter(submitter({ displayName: "x".repeat(81) }))
-    .errors.some((e) => e.includes("80 characters or fewer")));
-  assert.equal(validateSubmitter(submitter({ affiliation: "y".repeat(120) })).valid, true);
-  assert.ok(validateSubmitter(submitter({ affiliation: "y".repeat(121) }))
-    .errors.some((e) => e.includes("120 characters or fewer")));
 });
