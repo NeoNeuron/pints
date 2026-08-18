@@ -76,6 +76,29 @@ for up to an hour otherwise) and, when it comes back true, writes
 is idempotent and runs on every account-page load, so a registration interrupted
 between the two writes heals itself the next time the person opens their account.
 
+### Being listed without ever loading account.html
+
+Two routes skip that hook entirely: opening the verification link on a device
+where you are not signed in (the page redirects to sign-in and the write never
+happens), and submitting an abstract without registering — those people get a
+"set your password" mail rather than a verification one, so they never pass
+through `account.html` at all.
+
+Neither can be fixed in the browser, because `participants_public` may be
+written only by its owner or an organizer and the person in question is signed
+in nowhere. So `backfillParticipants` in `functions/` sweeps up the difference:
+every five minutes it compares verified Firebase Auth accounts against the
+public list and publishes anyone with a profile who is missing from it. It
+**never overwrites** an existing entry — it writes with `create()`, so a name an
+organizer corrected in the admin console cannot be reverted by it, and a race
+with the client's own publish resolves harmlessly.
+
+Five minutes rather than one: the client-side path already covers the common
+case immediately, so this is a safety net, and sweeping the whole list twelve
+times an hour would bill Firestore reads for nothing. Widen or narrow it by
+editing the `schedule` in `functions/index.js`. If the list is ever visibly
+lagging, that is the number to look at.
+
 `login.html` is sign-in and password reset only. Both pages carry a `?next=`
 target through registration, so "Submit an abstract" on the home page brings a
 signed-out visitor back to `account.html#abstract` once they have an account.
@@ -280,10 +303,13 @@ uploader. Both need the Admin SDK, so `functions/` holds these callables:
 | `deleteAbstractCompletely` | removes the abstract, its published copy, its reviews, its figure |
 | `deleteParticipant` | all of the above for every abstract they own, plus their profile, their public listing, and their login |
 | `syncDropboxGallery` | lists a Dropbox folder and caches its photographs in `gallery/{year}` — see "Photographs of previous editions" |
+| `backfillParticipants` | every five minutes, publishes verified participants who never loaded `account.html` — see "Being listed without ever loading account.html" |
 
-The first two are here because they must **bypass the rules**; the third because
-it must **hold a secret the browser cannot**. Those are the only two reasons
-anything belongs in `functions/`. The moment ordinary reads and writes start
+Three of these are here because they must **bypass the rules** — the deletes act
+on somebody else's documents, and the backfill writes on behalf of a person who
+is signed in nowhere. `syncDropboxGallery` is here because it must **hold a
+secret the browser cannot**. Those are the only two reasons anything belongs in
+`functions/`. The moment ordinary reads and writes start
 going through callables, the site stops being a static site and every page pays
 cold-start latency for work the rules already secure.
 
@@ -308,6 +334,9 @@ region — **if you change one, change both**, or every call fails as an opaque
 CORS error.
 
 Cloud Functions need the Blaze plan. Nothing else on the site does.
+`backfillParticipants` additionally needs **Cloud Scheduler**, which Firebase
+enables on the first deploy of a scheduled function; the job is free at this
+frequency and each sweep costs a handful of Firestore reads.
 
 ### Editing
 

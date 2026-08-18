@@ -501,6 +501,41 @@ error, and an erroring rule fails closed — so every submission is refused with
 obvious cause until you seed it. That is the *desired* behaviour in production
 (§4.1) and a confusing first five minutes locally. The README gives the curl.
 
+### 7.9 The listing gap got a scheduled sweep, not an auth-action page
+
+§7.2 hangs the public participant write on `account.html`, because the
+verification link already lands there and already forces a token refresh. That
+covers most people instantly and two groups not at all: anyone who opens the
+link on a device where they are not signed in, and every guest submitter, who
+is sent a password-reset mail rather than a verification one and so never visits
+the page. Completing that reset is precisely what verifies their address, so the
+people most likely to be missing are the ones who used the newest route in.
+
+Neither case can be fixed client-side. `participants_public` is writable only by
+its owner or an organizer, and the person is signed in nowhere — so whatever
+fixes it needs the Admin SDK, which means `functions/`.
+
+The alternative considered was hosting the email action page ourselves: a
+`auth-action.html` that calls `applyActionCode` (which works signed out) and
+then asks a callable to publish. It is genuinely event-driven and would have
+been instant. It was rejected because it takes over Firebase's handler for
+*every* auth email, so it would also have had to implement password reset and
+email-change correctly — more surface, and more to get wrong, for a result the
+sweep reaches within five minutes.
+
+Two details worth keeping if this is ever rewritten:
+
+- **It writes with `create()`, not `set()`.** "Never overwrite" is then enforced
+  by the database rather than by the freshness of the set of already-listed uids
+  read at the top of the run. An organizer's correction cannot be reverted by
+  it, and losing a race with the client's own publish is a no-op instead of a
+  clobber.
+- **Five minutes, not one.** The fast path already covers the common case, so
+  this is a net, and a net that sweeps the whole participant list every minute
+  is a standing Firestore bill for finding nothing. The design notes claim the
+  running cost of this site is nil; a poller is the easiest way to make that
+  quietly untrue.
+
 ## 8. Open items
 
 - **Restrict the web API key** and enable App Check (§3.4). Free, console-only.

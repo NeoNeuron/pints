@@ -28,9 +28,10 @@
 
 import { initializeApp } from "firebase-admin/app";
 import { getAuth } from "firebase-admin/auth";
-import { getFirestore } from "firebase-admin/firestore";
+import { FieldValue, getFirestore } from "firebase-admin/firestore";
 import { getStorage } from "firebase-admin/storage";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
+import { onSchedule } from "firebase-functions/v2/scheduler";
 import { defineSecret } from "firebase-functions/params";
 import { logger } from "firebase-functions";
 
@@ -277,5 +278,87 @@ export const syncDropboxGallery = onCall(
 
     logger.info("gallery synced", { year, photos: photos.length, by: adminUid });
     return { year, photos: photos.length, skipped: names.length - photos.length };
+  },
+);
+
+// ------------------------------------------------------ the listing backfill
+
+/**
+ * Put verified participants on the public list even if they never load a page.
+ *
+ * account.html publishes the moment a fresh token says the address is confirmed,
+ * and for most people that is instant — the verification link lands there. Two
+ * routes miss it entirely:
+ *
+ *  - opening the link on a phone, or any device where they are not signed in.
+ *    The page redirects to sign-in and the write never happens, so their name
+ *    appears only after they next log in somewhere.
+ *  - submitting an abstract without registering. Those people are sent a
+ *    "set your password" mail rather than a verification one, so they never
+ *    pass through account.html at all — and completing a password reset is
+ *    exactly what marks their address verified.
+ *
+ * Neither can be fixed in the browser: participants_public may be written only
+ * by its owner or an organizer, and the person in question is signed in
+ * nowhere. The Admin SDK ignores rules, which is what makes this function the
+ * place for it — the same admission test as the deletes above.
+ *
+ * Every five minutes rather than every minute. The client-side path already
+ * covers the common case immediately, so this is a safety net, and a net that
+ * sweeps the whole participant list twelve times an hour is a bill for nothing.
+ */
+export const backfillParticipants = onSchedule(
+  { region: REGION, schedule: "every 5 minutes" },
+  async () => {
+    // The edition is read, not hardcoded: js/config.mjs is the single source of
+    // truth for it and this package cannot import from the site. The settings
+    // tab writes it here on every save.
+    const edition = (await db.doc("config/site").get()).data()?.edition;
+    if (!edition) {
+      logger.error("config/site has no edition; refusing to guess", {});
+      return;
+    }
+
+    // One pass over who is already listed, so the common case — nobody new —
+    // costs one query and no writes.
+    const listed = new Set((await db.collection("participants_public").get()).docs
+      .map((doc) => doc.id));
+
+    let published = 0;
+    let pageToken;
+    do {
+      const page = await getAuth().listUsers(1000, pageToken);
+      for (const user of page.users) {
+        if (!user.emailVerified || listed.has(user.uid)) continue;
+
+        const profile = (await db.doc(`users/${user.uid}`).get()).data();
+        // No profile means they have an account but never gave a name, and a
+        // different edition means they registered for a previous year — neither
+        // belongs on this year's list.
+        if (!profile?.displayName || profile.edition !== edition) continue;
+
+        try {
+          // create(), not set(): it fails if the document is already there, so
+          // "never overwrite" is enforced by the database rather than by the
+          // freshness of the set read above. An organizer may have corrected
+          // this person's name, and a race with the client's own publish is
+          // entirely possible.
+          await db.doc(`participants_public/${user.uid}`).create({
+            displayName: profile.displayName,
+            affiliation: profile.affiliation ?? "",
+            edition,
+            updatedAt: FieldValue.serverTimestamp(),
+          });
+          published += 1;
+        } catch (err) {
+          // 6 is ALREADY_EXISTS: somebody else won the race, which is the
+          // outcome we wanted anyway.
+          if (err?.code !== 6) throw err;
+        }
+      }
+      pageToken = page.pageToken;
+    } while (pageToken);
+
+    if (published) logger.info("participants backfilled", { published });
   },
 );
