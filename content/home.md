@@ -2,10 +2,9 @@ PINTS is a one-day meeting that brings together the neuroscience, theory, and
 systems community across Paris and the Île-de-France region. Talks and posters
 span experimental, computational, and theoretical work. 
 
-**PINTS 2026 takes place on Friday 6 November 2026.** The venue will be announced
-shortly.
+**PINTS 2026 takes place on Friday 6 November 2026 at the Daniel Cohen amphitheatre, ENS Campus Jourdan.** 
 
-Registrations and abstract submissions are open!
+<span style="color:red"> Registrations and abstract submissions **are open until 06/10/2026**.</span>
 
 ## Keynote
 
@@ -26,16 +25,11 @@ Registrations and abstract submissions are open!
 ## Registration
 
 Registration is free but required, so we can plan catering and poster boards.
-[Create an account](register.html) with your name and affiliation; confirming your
-email address puts you on the [participant list](participants.html) and lets you
-[submit an abstract](submit.html), if you wish. Each participant may
-submit one abstract, and a figure with a caption is part of it. You do not need
-an account to submit: one is created for you.
-Already registered? [Sign in](login.html).
+[Create an account](register.html) to register and to submit an abstract, if you wish.
 
 ## Sponsors
 
 We thank [majab.com](https://www.majab.com/) for designing our logo, and [Institut de la Vision](https://www.institut-vision.org/?gad_source=1&gad_campaignid=23532190238&gbraid=0AAAAA-XeQ52Ug4krC6bS88HSlP0qzvdUe), 
 [DIM C-Brains](https://dim-cbrains.fr/fr/home), [QLife](https://psl.eu/q-life) and [Aquineuro](https://aquineuro.eu/) for their generous support.
 
-![Institut de l'Audition, AquiNeuro, DIM C-Brains and QLife](assets/sponsors/sponsors-2025.png)
+![Institut de la Vision, AquiNeuro, DIM C-Brains and QLife](assets/sponsors/sponsors-2026.png)
