@@ -236,6 +236,10 @@ scored it — because the review screen has to survive the same hundreds the pub
 list does. Rows open in place, their bodies built on first open, and **open rows
 survive the re-render** that follows every accept, reject and review save.
 
+**Expand all** opens every row on screen — collapsing leaves the row holding the
+editor alone, since the form is mounted inside the body and closing it would hide
+a half-typed draft.
+
 **Sort within topic** orders each topic group by mean score, highest or lowest
 first, or by title. Always within a topic: a mean of 7.4 in cognitive against 7.6
 in systems compares two panels' scoring habits, not two abstracts. Unscored

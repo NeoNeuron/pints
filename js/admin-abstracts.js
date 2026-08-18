@@ -101,6 +101,18 @@ export async function mountAbstractsTab(host, { adminUid, user }) {
   // because render() replaces every node, and the state has to outlive them.
   const openIds = new Set();
 
+  const toggleAll = document.createElement("button");
+  toggleAll.type = "button";
+  toggleAll.className = "secondary";
+  toggleAll.id = "adm-expand-all";
+  toggleAll.textContent = "Expand all";
+  // Derived from the rows rather than from the label, so the button cannot get
+  // out of step with a list that re-renders after every action.
+  toggleAll.addEventListener("click", () => {
+    const rows = [...listEl.querySelectorAll("details.admin-abstract")];
+    expandAll(!rows.every((el) => el.open));
+  });
+
   const filters = { q: "", status: "", type: "", topic: "", talk: "" };
 
   // Not part of `filters`: it changes the order, not the set, and Clear filters
@@ -229,7 +241,31 @@ export async function mountAbstractsTab(host, { adminUid, user }) {
     note.className = "muted";
     note.id = "adm-export-note";
 
-    bar.append(abstractsBtn, scoresBtn, note);
+    bar.append(toggleAll, abstractsBtn, scoresBtn, note);
+  }
+
+  /**
+   * Open or close every row currently on screen.
+   *
+   * The DOM is set and the rows' own toggle listeners update `openIds`, so there
+   * is one place that decides what "open" means and it cannot drift from what a
+   * click does. Collapsing leaves the row being edited alone: the editor is
+   * mounted inside the body, and closing it would hide a half-typed draft.
+   */
+  function expandAll(open) {
+    for (const el of listEl.querySelectorAll("details.admin-abstract")) {
+      if (!open && el.dataset.abstractId === editingId) continue;
+      el.open = open;
+    }
+    syncToggleAll();
+  }
+
+  /** The label follows the list, not the last click: a render can change both. */
+  function syncToggleAll() {
+    const rows = [...listEl.querySelectorAll("details.admin-abstract")];
+    const allOpen = rows.length > 0 && rows.every((el) => el.open);
+    toggleAll.textContent = allOpen ? "Collapse all" : "Expand all";
+    toggleAll.hidden = rows.length === 0;
   }
 
   /**
@@ -353,12 +389,15 @@ export async function mountAbstractsTab(host, { adminUid, user }) {
       buildBody: () => card(abstract, published, refresh),
     });
 
+    details.dataset.abstractId = abstract.id;
+
     // Open rows survive the re-render that follows every action on this tab.
     // Without this, accepting one abstract slams shut whatever the organizer was
     // reading, which on a hundred-row list is worse than the long page was.
     details.addEventListener("toggle", () => {
       if (details.open) openIds.add(abstract.id);
       else openIds.delete(abstract.id);
+      syncToggleAll();
     });
     // The editor lives inside the body, so a row holding it cannot be closed.
     if (openIds.has(abstract.id) || editingId === abstract.id) details.open = true;
@@ -665,6 +704,8 @@ export async function mountAbstractsTab(host, { adminUid, user }) {
       listEl.append(heading);
       for (const a of items) listEl.append(row(a, published, render));
     }
+
+    syncToggleAll();
 
     emptyEl.textContent = !abstracts.length ? "No abstracts have been submitted yet."
       : !shown.length ? "No abstracts match these filters."
