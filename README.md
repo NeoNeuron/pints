@@ -81,8 +81,12 @@ between the two writes heals itself the next time the person opens their account
 Two routes skip that hook entirely: opening the verification link on a device
 where you are not signed in (the page redirects to sign-in and the write never
 happens), and submitting an abstract without registering — those people get a
-"set your password" mail rather than a verification one, so they never pass
-through `account.html` at all.
+"set your password" mail rather than a verification one.
+
+The second of those is narrowed as far as it can be: the reset mail carries a
+continue URL of `login.html?next=account.html`, so finishing it drops them on
+the sign-in page and signing in publishes them at once. It still does not close
+the gap, because nothing obliges them to sign in there.
 
 Neither can be fixed in the browser, because `participants_public` may be
 written only by its owner or an organizer and the person in question is signed

@@ -30,6 +30,22 @@ const returnToAccount = () => ({
 export const sendVerification = (user) => sendEmailVerification(user, returnToAccount());
 
 /**
+ * Where Firebase sends a submitter after they set their password.
+ *
+ * The reset link is what verifies their address, and finishing it is the moment
+ * they should join the participant list. Without a continue URL they stop on a
+ * Firebase-hosted "password changed" page and the list waits for the five-minute
+ * backfill sweep instead. They are not signed in at that point — completing a
+ * reset proves the address, it does not open a session — so the target is the
+ * sign-in page carrying `next`, and account.html publishes them the moment they
+ * arrive.
+ */
+const returnToSignIn = () => ({
+  url: new URL(withNext("login.html", "account.html"), location.href).href,
+  handleCodeInApp: false,
+});
+
+/**
  * Create the account, then try to send the verification email.
  *
  * A mail failure must NOT look like a signup failure: the account already
@@ -68,7 +84,7 @@ export async function createSubmitterAccount(email) {
   await persistenceFor(true);
   const { user } = await createUserWithEmailAndPassword(auth, email, throwawayPassword());
   try {
-    await sendPasswordResetEmail(auth, email);
+    await sendPasswordResetEmail(auth, email, returnToSignIn());
     return { user, passwordEmailSent: true };
   } catch (err) {
     console.error("[pints] sendPasswordResetEmail after auto-registration", err);
