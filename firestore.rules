@@ -84,6 +84,21 @@ service cloud.firestore {
             || data.session in ['cognitive', 'systems', 'computational', 'keynote']);
     }
 
+    // The home page hero photographs, config/hero. Checked even though the write
+    // is admin-only, for the same reason gallery/{year} is: index.html renders
+    // whatever ends up here, and a malformed list would take the landing page
+    // down rather than one admin screen.
+    //
+    // The 12 is HERO.maxPhotos in js/config.mjs; rules cannot import it. Keep
+    // the two in step by hand -- the client caps the list as well, so a drift
+    // here shows up as a save the console offers and the database refuses.
+    function validHero(data) {
+      return data.keys().hasOnly(['photos', 'updatedAt', 'updatedBy'])
+        && data.keys().hasAll(['photos'])
+        && data.photos is list
+        && data.photos.size() <= 12;
+    }
+
     function validProfile(data) {
       return data.keys().hasOnly(['email', 'displayName', 'affiliation', 'showPublicly',
                                   'edition', 'consentAt', 'createdAt', 'updatedAt'])
@@ -94,11 +109,18 @@ service cloud.firestore {
         && (!('showPublicly' in data) || data.showPublicly is bool);
     }
 
-    // Site configuration: submission window and current edition. Public read so
-    // every page can show the deadline; admin write only.
+    // Site configuration: submission window and current edition, plus config/hero
+    // for the home page photographs. Public read so every page can show the
+    // deadline; admin write only.
+    //
+    // The hero check is a condition on docId inside this match rather than a
+    // `match /config/hero` block of its own: rules are OR-ed across every
+    // matching path, so a narrower block could only ever add permission, never
+    // take the shape check back off the broader one.
     match /config/{docId} {
       allow read: if true;
-      allow write: if isAdmin();
+      allow write: if isAdmin()
+        && (docId != 'hero' || validHero(request.resource.data));
     }
 
     // Admin registry. A user may read their OWN document so the client knows

@@ -10,6 +10,11 @@
 <body>
 <header id="site-header"></header>
 <section class="hero">
+  <!-- Filled by js/hero-slider.js, and left empty when no photographs are set.
+       aria-hidden because they are decoration: the logo's alt already says what
+       this band is, and a screen reader gains nothing from hearing a
+       photograph described behind it. -->
+  <div class="hero-photos" id="hero-photos" aria-hidden="true"></div>
   <div class="wrap">
     <h1><img class="logo" src="assets/pints-2026-header.svg" width="522" height="107"
       alt="PINTS 2026 — Paris Île-de-France Neuroscience, Theory, and Systems. November 6th, 2026, Daniel Cohen Amphitheater, ENS, 48 Bd Jourdan, 75014 Paris"></h1>

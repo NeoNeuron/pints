@@ -875,6 +875,41 @@ Three things carried forward from that period rather than being reverted:
 "Your details" fieldset went with the flow that needed them. They are in the
 history if the decision reverses a third time.
 
+### 7.22 Two ways a decorative layer leaked onto a page that had none
+
+Putting photographs behind the home page hero was supposed to be additive: with
+no photographs the band must be exactly the flat `--accent-soft` it always was.
+Two separate things broke that promise, and both were invisible in the code.
+
+**A `mix-blend-mode` layer with nothing under it still paints.** The burgundy
+duotone started life on `.hero-photos`, the container, so that one rule tinted
+every slide. That reads well and is wrong: with no slides, `mix-blend-mode:
+color` has no backdrop to take luminosity from, so it falls back to the source
+colour and lays flat `--accent` over the band at the layer's opacity. An empty
+hero came out washed burgundy. The tint belongs to a photograph, so it moved to
+`.hero-slide::after` — no slides, no tint, and the case that needs to be perfect
+is perfect by construction rather than by arithmetic.
+
+That move needed `isolation: isolate` on the slide. The blend has to reach the
+slide's own photograph and stop there, and it is tempting to let the existing
+`transform` do it — but the on-screen slide is `transform: none`, which creates
+no stacking context at all, so exactly the slide you are looking at would have
+bled its tint onto the band underneath.
+
+**`transparent` is not "this colour, invisible".** The legibility veil is
+`--accent-soft` fading out at both edges, and over an `--accent-soft` band that
+should be a no-op at every stop. It was not: the ends were visibly greyer. The
+keyword `transparent` is `rgba(0, 0, 0, 0)` — transparent *black* — so the
+gradient interpolated from a pale pink toward black while fading, and left a grey
+cast across both ends of a band that had no photographs behind it. Written as
+`rgb(from var(--accent-soft) r g b / 0)` the hue is constant and the veil really
+does disappear.
+
+Both share a shape worth remembering: **a layer that is meant to be invisible in
+the empty case has to be invisible by construction, not by a calculation that
+happens to come out to zero.** Neither bug was reachable through the tests —
+they are questions about compositing, and only a screenshot answers them.
+
 ## 8. Open items
 
 - **Restrict the web API key** and enable App Check (§3.4). Free, console-only.
@@ -888,3 +923,8 @@ history if the decision reverses a third time.
 - **`pints.fr` exists** and currently forwards to the 2025 site. Pointing Pages
   at it would give the site a proper domain and remove the `404.html` `<base>`
   coupling.
+- **The logo's grey is now `#5c5c5c`** (was the designer's `#808080`). With
+  `.hero::after` at `.78` the date line reads 4.4:1 against a black pixel and
+  4.9:1 over a mid-tone, so it clears AA over any real photograph and sits just
+  under it in the worst case. `.80` crosses 4.5:1 outright. See "A note on the
+  logo's grey" in the README.

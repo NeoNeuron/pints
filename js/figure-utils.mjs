@@ -6,15 +6,21 @@ import { FIGURE } from "./config.mjs";
  * module stays testable under Node.
  */
 
-/** Same limits as storage.rules. Returns { valid, errors[] }. */
-export function validateFigure({ type, size } = {}) {
+/**
+ * Same limits as storage.rules. Returns { valid, errors[] }.
+ *
+ * `limits` is a parameter because the hero photographs (HERO in js/config.mjs)
+ * are checked against the same three things with their own numbers. Defaulting
+ * it to FIGURE keeps every existing caller as it was.
+ */
+export function validateFigure({ type, size } = {}, limits = FIGURE) {
   const errors = [];
-  if (!FIGURE.types.includes(type)) {
+  if (!limits.types.includes(type)) {
     errors.push("The figure must be a PNG, JPEG, or WebP image.");
   }
   if (!Number.isFinite(size) || size <= 0) errors.push("The figure file appears to be empty.");
-  else if (size > FIGURE.maxBytes) {
-    errors.push(`The figure must be under ${Math.round(FIGURE.maxBytes / (1024 * 1024))} MB.`);
+  else if (size > limits.maxBytes) {
+    errors.push(`The figure must be under ${Math.round(limits.maxBytes / (1024 * 1024))} MB.`);
   }
   return { valid: errors.length === 0, errors };
 }

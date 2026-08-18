@@ -80,7 +80,13 @@ a { color: var(--accent); }
   transition: opacity .15s ease, visibility .15s;
 }
 .to-top-shown { opacity: 1; visibility: visible; pointer-events: auto; }
-@media (prefers-reduced-motion: reduce) { .to-top { transition: none; } }
+@media (prefers-reduced-motion: reduce) {
+  .to-top { transition: none; }
+  /* Belt and braces with js/hero-slider.js, which does not start its timer at
+     all under reduced motion: if the slider is ever advanced some other way,
+     the photographs still cut rather than slide. */
+  .hero-slide { transition: none !important; }
+}
 
 main { padding-block: 2rem 1rem; }
 /* The home page's hero is a filled band, not just a rule: its bottom edge needs
@@ -89,21 +95,156 @@ main { padding-block: 2rem 1rem; }
 .hero + main { padding-top: 3.5rem; }
 
 /* Hero */
-.hero { background: var(--accent-soft); border-bottom: 1px solid var(--line); }
-/* Asymmetric on purpose: the action row is the last thing in the hero and needs
-   little room under it, while the band itself has to read as separate from the
-   copy that follows (see main's padding-top). */
-.hero .wrap { padding-block: 3rem 1.75rem; }
+/* position and overflow are for the photographs behind it (see below); the band
+   takes no z-index of its own, so it stays under .to-top's 10 and the normal
+   flow decides everything else.
+
+   min-height because content height alone crops a landscape photograph to a
+   strip too thin to make out. It scales with the viewport rather than sitting
+   at one number: 26rem is a good band on a laptop and far too much of a phone
+   screen, and the floor is the height the hero had before the photographs, so
+   the band never gets shorter than it used to be at any width.
+
+   The content is centred in that height rather than sitting at the top. Once
+   min-height exceeds what the logo and buttons need, the surplus would
+   otherwise all fall below them and leave the band looking bottom-heavy. */
+.hero {
+  position: relative;
+  overflow: hidden;
+  min-height: clamp(20rem, 30vw, 26rem);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  background: var(--accent-soft);
+  border-bottom: 1px solid var(--line);
+}
+/* Positioned and lifted, so the logo and buttons paint above both the photo
+   layer and the legibility veil below. The 1 only has to beat those two; it
+   stays well under .to-top's 10, which is the only other z-index here.
+
+   The padding is asymmetric on purpose: the action row is the last thing in the
+   hero and needs little room under it, while the band itself has to read as
+   separate from the copy that follows (see main's padding-top).
+
+   width:100% is not redundant. .hero is a flex column now, which makes this a
+   flex item, and .wrap's own `margin: 0 auto` is an auto margin on the cross
+   axis -- which switches stretch off and leaves the item shrink-to-fit. The
+   column then collapsed to the width of the widest thing in it, taking the
+   logo's `width: 100%` down with it. This restores the block-layout behaviour:
+   full width, capped by max-width, centred by the auto margins. */
+.hero .wrap { position: relative; z-index: 1; width: 100%; padding-block: 3rem 1.75rem; }
+/* More air between the logo and the buttons than .actions gives it elsewhere.
+   The global 1.5rem is sized for an action row that closes a form, sitting just
+   under the last field it applies to. Here the two are separate things -- an
+   identity and a set of choices -- and at the hero's size they read as crowded
+   at that distance. Scoped to .hero so no form on any other page moves. */
+.hero .actions { margin-top: 2.75rem; }
+
+/* Hero photographs (js/hero-slider.js).
+
+   Three layers, and each one is load-bearing:
+
+   1. .hero-photos carries the opacity, rather than each slide carrying its own.
+      Two slides overlap mid-transition, and per-slide opacity would make the
+      overlap darker than either slide alone -- a visible pulse on every change.
+
+   2. Each slide carries a burgundy veil in `color` blend mode, which keeps the
+      photograph's luminosity and takes only hue and saturation from --accent.
+      Without it a quarter-strength photograph over --accent-soft comes out a
+      flat grey-pink and the band stops reading as the PINTS colour at all.
+
+   3. .hero::after, below, lifts the middle back up for the text.
+
+   The opacity and the veil's alpha are a matched pair, not two free knobs. The
+   veil covers the middle of the band, where all the type is, so raising it buys
+   back the contrast that raising the opacity costs -- while the band's left and
+   right thirds, which the veil fades out over, keep the full strength. Moving
+   one without the other is what makes the hero either muddy or illegible.
+   Measured behind the type, against a black pixel -- the worst case any
+   photograph can present: .45/.78 holds the wordmark at 6.7:1 and the date line
+   at 4.4:1. Over a mid-tone the date line is 4.9:1. See the contrast note on
+   .hero::after. */
+.hero-photos { position: absolute; inset: 0; opacity: var(--hero-photo-opacity, .45); }
+/* Legibility veil, over the photographs and under the logo.
+
+   The hero's text is the logo SVG, and its date and subtitle lines are #808080
+   -- which manages only 3.3:1 against the bare --accent-soft band, before any
+   photograph darkens it further. This puts --accent-soft back over the middle
+   of the band, where .wrap's 62rem column sits, and fades out to nothing at the
+   edges so the photographs stay at full strength either side of the type.
+
+   That grey is the ceiling on how clear the photographs can get: it is what
+   stops --hero-photo-opacity going higher, not the logo itself, which has
+   contrast to spare. Fixing GREY in scripts/logo/build_logo.py would lift the
+   ceiling for both numbers -- see the README.
+
+   It cannot be a ::before: generated content before the first child would paint
+   under .hero-photos rather than over it, which is why .hero .wrap needs the
+   z-index above -- this ::after is the last child and would otherwise cover the
+   logo along with the photographs.
+
+   The end stops are --accent-soft at zero alpha, written with relative colour
+   syntax, and NOT the `transparent` keyword. `transparent` is rgba(0,0,0,0), so
+   a gradient running to it interpolates through transparent *black* and lays a
+   grey cast over both ends of the band -- visible even with no photographs
+   behind it, where this layer is supposed to be invisible. Fading to the same
+   colour at zero alpha keeps the hue constant, which makes the whole veil a
+   no-op over the bare --accent-soft band. */
+.hero::after {
+  content: "";
+  position: absolute; inset: 0;
+  pointer-events: none;
+  background: linear-gradient(90deg,
+    rgb(from var(--accent-soft) r g b / 0) 0%,
+    rgb(from var(--accent-soft) r g b / .78) 20%,
+    rgb(from var(--accent-soft) r g b / .78) 80%,
+    rgb(from var(--accent-soft) r g b / 0) 100%);
+}
+/* Every slide waits off the right edge; .hero's overflow:hidden clips it there.
+   No transition in this state on purpose -- a slide that has just stopped being
+   .leaving returns here, and it must jump back rather than fly across the band
+   in front of the reader. */
+.hero-slide {
+  position: absolute; inset: 0;
+  background-size: cover; background-position: center;
+  transform: translateX(100%);
+  /* So the duotone below blends with this slide's own photograph and nothing
+     else. Not left to the transform to isolate: the on-screen slide is
+     `transform: none`, which creates no stacking context, and the tint would
+     then reach the hero band underneath. */
+  isolation: isolate;
+}
+/* The burgundy duotone, per slide rather than over the whole layer. On the
+   layer it painted even with no slides beneath it -- blending against nothing
+   leaves the source colour, so an empty hero came out washed burgundy instead
+   of the plain --accent-soft band it is supposed to be. */
+.hero-slide::after {
+  content: "";
+  position: absolute; inset: 0;
+  background: var(--accent);
+  mix-blend-mode: color;
+}
+.hero-slide.current { transform: none; transition: transform .9s ease; }
+.hero-slide.leaving { transform: translateX(-100%); transition: transform .9s ease; }
 /* The h1 holds only the logo image, so it carries no type of its own. `font:
    inherit` matters beyond tidiness: --measure is 68ch, and ch is the width of
    the element's own "0" — under the h1's bold display font that came out 9%
    wider than the identical rule on .prose. */
 .hero h1 { margin: 0 0 .5rem; font: inherit; }
 /* index.html puts the header logo inside the h1, so the h1's own margin still
-   does the spacing. Capped at --measure, the same width the prose column below
-   uses, so the hero and the page copy share one left-to-right rhythm rather than
-   the logo floating short of the text. */
-.hero h1 .logo { display: block; width: 100%; max-width: var(--measure); height: auto; }
+   does the spacing.
+
+   The cap used to be --measure, matching the prose column below so the hero and
+   the page copy shared one left-to-right rhythm. It is wider than that now, to
+   hold its own against the photographs behind it -- so the logo deliberately
+   runs past the right edge of the text column below. width:100% keeps it
+   shrinking to fit on a narrow screen, where the cap never comes into play. */
+.hero h1 .logo {
+  display: block;
+  width: 100%;
+  max-width: var(--hero-logo-width, 46rem);
+  height: auto;
+}
 
 /* Cards, tables, forms */
 figure { margin: 1rem 0; }

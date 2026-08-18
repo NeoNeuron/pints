@@ -46,11 +46,14 @@ paid Firebase plan; the CSV export stands in for it.
   day-to-day organizing.
 - **Archive** — a slideshow of photographs from previous editions, synced from a
   Dropbox folder by an organizer. See "Photographs of previous editions".
+- **Home photos** — the photographs that slide past behind the logo on the home
+  page, uploaded straight from the admin console. See "Photographs behind the
+  home page hero".
 - **Organizer edit and delete** — organizers can correct a participant's name or
   affiliation, edit any abstract at any status, and delete an abstract or a
   participant outright. See "Editing and deleting as an organizer".
 
-94 security-rules tests and 174 unit tests cover this.
+103 security-rules tests and 182 unit tests cover this.
 
 ### Deploying rules — order matters
 
@@ -335,6 +338,73 @@ callable and `firestore.rules`), and Dropbox caps public-link bandwidth at
 20 GB/day on a Basic account. A conference gallery is nowhere near either, but if
 the Archive page ever draws real traffic, move the photographs to Firebase
 Storage.
+
+## Photographs behind the home page hero
+
+The home page hero — the burgundy band holding the logo and the three buttons —
+can carry photographs of the meeting, sliding past one at a time behind the type.
+An organizer uploads them in the admin console's **Home photos** tab: press **Add
+photographs**, reorder with the arrows, type a description, and press **Save**.
+Up to twelve.
+
+**With no photographs set, the hero is exactly the flat band it has always been.**
+That is the default and the fallback: an empty list, a Firestore read that fails,
+or a browser that cannot reach Storage all end at the same place. Nothing about
+the landing page depends on the photographs arriving.
+
+They are shown faded and tinted burgundy, so they read as part of the brand
+colour rather than as a photo banner — clear enough to make out the room, not so
+clear that they fight the logo. Wide shots of the room or the poster session
+work; close-up portraits do not, because the band is a very wide, short crop.
+
+Two numbers in `css/styles.css` control this and **should be moved together**:
+`--hero-photo-opacity` (`.45`) and the alpha in the `.hero::after` gradient
+(`.78`). The veil covers the middle of the band, where the type is, so raising it
+buys back the contrast that raising the opacity costs, while the left and right
+thirds keep the photographs at full strength.
+
+Where things live:
+
+- `config/hero` in Firestore — the list: `path`, `url` and `alt` per photograph,
+  in display order. World-readable, organizer-writable, and shape-checked by
+  `validHero()` in `firestore.rules` because the home page renders whatever is in it.
+- `hero/{uid}/{id}` in Storage — the files. The uid is in the path because
+  storage rules cannot read Firestore and so cannot ask whether the uploader is
+  an organizer; the Firestore write that actually puts a photograph on the home
+  page is the admin-gated half.
+- `js/hero-slider.js` — the slider. `js/hero-utils.mjs` is the pure half; the
+  wrapping index arithmetic is shared with the archive slideshow
+  (`js/slideshow-utils.mjs`).
+
+Uploads are downscaled in the browser to `HERO.maxEdge` before they leave it, the
+same canvas step abstract figures go through, so a 17 MB photograph off a camera
+lands as a couple of hundred kilobytes.
+
+The slider stops while the tab is in the background, and under
+`prefers-reduced-motion: reduce` it paints the first photograph and never starts
+a timer at all.
+
+### A note on the logo's grey
+
+The date and subtitle lines in `assets/pints-2026-header.svg` used to be the
+designer's `#808080`, which manages only 3.3:1 against the bare band — under the
+4.5:1 small text is meant to clear, before any photograph darkened it further. At
+the current photo strength it fell to 2.4:1, which is not legible.
+
+`GREY` in `scripts/logo/build_logo.py` is now `#5c5c5c`, the `--muted` grey the
+rest of the site already uses for secondary text. That is 5.5:1 on the bare band
+and **4.1:1 over the darkest photograph** — a little under AA for small text (the
+subtitle renders at about 17.6px), but two-thirds of the way back from where it
+was. `assets/pints-mark.svg` is unaffected: it carries the wordmark only and has
+no grey in it.
+
+`.hero::after` does the rest of the work, putting the band colour back over the
+middle of the hero and fading out at the edges so the photographs stay at full
+strength either side of the type. Its alpha is `.78`, which brings the date line
+to **4.4:1 against a black pixel** and **4.9:1 over a mid-tone** — so it clears
+AA over any real photograph, and sits just under it in the theoretical worst
+case. `.80` crosses 4.5:1 outright if that matters more than the last sliver of
+photo clarity behind the type; the band's edges are unaffected either way.
 
 ## Editing page content
 

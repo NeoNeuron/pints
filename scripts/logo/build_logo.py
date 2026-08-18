@@ -23,7 +23,13 @@ ASSETS = HERE / ".." / ".." / "assets"
 # and inlining the mark to make it themeable would put a 46KB blob in every
 # page just to share one hex value.
 BRAIN = "#7b1e3a"
-GREY = "#808080"
+# The subtitle's lower case and the three date lines. This tracks --muted in
+# css/styles.css, and it is a legibility fix rather than a style choice: the
+# designer's #808080 clears only 3.3:1 against the hero's --accent-soft band,
+# under the 4.5:1 small text is meant to meet, and the band now carries
+# photographs behind it which take it lower still. #5c5c5c is the grey the rest
+# of the site already uses for secondary text, and clears 7:1 on the bare band.
+GREY = "#5c5c5c"
 DATE = ["November 6th, 2026", "Daniel Cohen Amphitheater, ENS", "48 Bd Jourdan, 75014 Paris"]
 
 # Sizes measured back off the designer's own export (pints_header_2025.png):

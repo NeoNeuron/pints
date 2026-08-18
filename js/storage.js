@@ -7,8 +7,9 @@ import {
 // The shared instance, not a second getStorage(app): only that one has been
 // pointed at the emulator when a page asks for it.
 import { storage } from "./firebase.js";
-import { FIGURE } from "./config.mjs";
+import { FIGURE, HERO } from "./config.mjs";
 import { figurePath, outputType, targetSize } from "./figure-utils.mjs";
+import { heroPath } from "./hero-utils.mjs";
 
 export { storage };
 
@@ -19,10 +20,13 @@ export { storage };
  * 6 MB, which storage.rules rejects outright; and every accepted figure is
  * fetched by every visitor to abstracts.html, so the page weight is the real
  * cost, not the bucket. Resolves to a Blob of `outputType(file.type)`.
+ *
+ * maxEdge is a parameter because hero photographs want a wider cap than figures
+ * do -- see HERO in js/config.mjs.
  */
-async function downscale(file) {
+async function downscale(file, maxEdge = FIGURE.maxEdge) {
   const bitmap = await createImageBitmap(file);
-  const { width, height } = targetSize(bitmap.width, bitmap.height, FIGURE.maxEdge);
+  const { width, height } = targetSize(bitmap.width, bitmap.height, maxEdge);
   const canvas = document.createElement("canvas");
   canvas.width = width;
   canvas.height = height;
@@ -52,8 +56,27 @@ export async function uploadFigure(uid, abstractId, file) {
 }
 
 /**
+ * Upload one hero photograph. -> { url, path }.
+ *
+ * A new id per upload rather than one object per slot: the admin tab reorders
+ * and removes photographs, and a slot-keyed path would mean rewriting several
+ * objects to move one photo up the list.
+ */
+export async function uploadHeroPhoto(uid, id, file) {
+  const path = heroPath(uid, id);
+  const blob = await downscale(file, HERO.maxEdge);
+  const objectRef = ref(storage, path);
+  await uploadBytes(objectRef, blob, { contentType: blob.type || outputType(file.type) });
+  return { url: await getDownloadURL(objectRef), path };
+}
+
+/**
  * Delete an uploaded figure. A missing object is not an error worth surfacing:
  * the caller's goal is "no figure here", which is already true.
+ *
+ * Hero photographs go through here too -- the path is the only thing that
+ * differs, and a second copy of this would be a second place to forget the
+ * object-not-found case.
  */
 export async function deleteFigure(path) {
   if (!path) return;

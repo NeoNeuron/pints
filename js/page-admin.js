@@ -28,6 +28,7 @@ if (!warnIfUnconfigured(guard)) {
       schedule: () => import("./admin-schedule.js").then((m) => m.mountScheduleTab),
       pages: () => import("./admin-pages.js").then((m) => m.mountPagesTab),
       participants: () => import("./admin-participants.js").then((m) => m.mountParticipantsTab),
+      hero: () => import("./admin-hero.js").then((m) => m.mountHeroTab),
       archive: () => import("./admin-archive.js").then((m) => m.mountArchiveTab),
       settings: () => import("./admin-settings.js").then((m) => m.mountSettingsTab),
     };

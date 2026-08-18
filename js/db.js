@@ -346,6 +346,37 @@ export function saveSiteConfig(patch) {
     { ...clean, edition: CURRENT_EDITION }, { merge: true });
 }
 
+/**
+ * The photographs behind the home page hero.
+ *
+ * Its own document rather than a field on config/site, so the landing page can
+ * fetch it without also pulling the submission window, and so a malformed hero
+ * write can never take the deadline down with it.
+ *
+ * Returns null when nobody has set any: js/hero-slider.js treats that as "leave
+ * the hero exactly as it is", which is the correct behaviour and also what
+ * every visitor sees before an organizer uploads anything.
+ */
+export async function getHeroPhotos() {
+  const snap = await getDoc(doc(db, "config", "hero"));
+  return snap.exists() ? snap.data() : null;
+}
+
+/**
+ * Replace the hero list wholesale.
+ *
+ * Not a merge, unlike saveSiteConfig: `photos` is an array, and Firestore
+ * replaces a merged array wholesale anyway, so a merge would only add the
+ * chance of a stale key surviving a save. The caller passes the full list it
+ * just edited.
+ */
+export const saveHeroPhotos = (photos, adminUid) =>
+  setDoc(doc(db, "config", "hero"), {
+    photos,
+    updatedAt: serverTimestamp(),
+    updatedBy: adminUid,
+  });
+
 export const addAdmin = (uid, email, addedBy) =>
   setDoc(doc(db, "admins", uid), { email, addedBy, addedAt: serverTimestamp() });
 

@@ -1,6 +1,9 @@
 import { mountLayout, setAuthLink } from "./layout.js";
 import { onUser } from "./auth.js";
 import { hydrateMarkdownHosts } from "./content-hydrate.js";
+import { getHeroPhotos } from "./db.js";
+import { mountHeroSlider } from "./hero-slider.js";
+import { heroPhotos } from "./hero-utils.mjs";
 import { withNext } from "./redirect-utils.mjs";
 
 mountLayout();
@@ -24,3 +27,19 @@ onUser(({ user, isAdmin }) => {
 });
 
 await hydrateMarkdownHosts();
+
+// The home page's hero photographs. This module is shared by several static
+// pages and only index.html carries the element, hence the guard.
+//
+// The copy first, and the photographs second and in a try: they are decoration
+// on top of a band that is already the right colour, so a Firestore outage
+// leaves the hero looking exactly as it did before there were any photographs
+// rather than leaving a hole in the landing page.
+const heroHost = document.getElementById("hero-photos");
+if (heroHost) {
+  try {
+    mountHeroSlider(heroHost, heroPhotos(await getHeroPhotos()));
+  } catch (err) {
+    console.error("[pints] hero", err);
+  }
+}

@@ -71,6 +71,20 @@ export const FIGURE = {
   types: ["image/png", "image/jpeg", "image/webp"],
 };
 
+// The photographs behind the home page hero.
+//
+// maxEdge is larger than a figure's: a figure is capped at the 62rem prose
+// column, while the hero band is as wide as the window. maxPhotos is a limit on
+// taste as much as on bytes -- a visitor sees one slide every intervalMs and
+// leaves long before a twelfth would come round.
+export const HERO = {
+  maxBytes: 5 * 1024 * 1024,
+  maxEdge: 1800,
+  types: ["image/png", "image/jpeg", "image/webp"],
+  maxPhotos: 12,
+  intervalMs: 7000,
+};
+
 /**
  * Editable pages. `file` is the copy committed to the repo, which is both the
  * seed for a page that has never been edited on the site and the fallback when
