@@ -557,6 +557,10 @@ PATH="/opt/homebrew/opt/openjdk/bin:$PATH" npm run emulators
 - Multi-page static HTML at the repository root. Each page has a real `<title>`
   and `<h1>`; the header, nav, and footer are injected by `js/layout.js` from the
   single `NAV` definition in `js/config.mjs`.
+  `js/layout.js` also drops in the floating **back to top** button, bottom right,
+  which appears once the page has scrolled half a viewport. `404.html` is the one
+  page without any of this: GitHub Pages serves it from the requested path, so it
+  cannot import anything relative and is self-contained by design.
 - Pure logic lives in `js/*-utils.mjs` and is unit-tested under Node. DOM and
   Firebase glue lives in `js/page-*.js`.
 - `marked` and `DOMPurify` are **vendored** into `vendor/` by `npm run vendor`,

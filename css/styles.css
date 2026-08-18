@@ -61,6 +61,27 @@ a { color: var(--accent); }
 .site-footer { margin-top: 4rem; border-top: 1px solid var(--line); background: var(--bg-soft); }
 .site-footer .wrap { padding-block: 1.5rem; color: var(--muted); font-size: .9rem; }
 
+/* Back to top (js/layout.js). The header is not sticky, so on the long pages —
+   the abstract list, the program, the review console with rows open — there is
+   otherwise no way back to the nav but dragging.
+
+   visibility, not opacity alone: a transparent button is still in the tab order,
+   and tabbing into a control nobody can see is worse than not having one. */
+.to-top {
+  position: fixed; right: 1rem; bottom: calc(1rem + env(safe-area-inset-bottom));
+  width: 2.75rem; height: 2.75rem; padding: 0; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1.25rem; line-height: 1;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, .25);
+  /* Only has to beat the normal flow — nothing else on the site is positioned.
+     dialog.confirm lives in the top layer and is above this regardless. */
+  z-index: 10;
+  opacity: 0; visibility: hidden; pointer-events: none;
+  transition: opacity .15s ease, visibility .15s;
+}
+.to-top-shown { opacity: 1; visibility: visible; pointer-events: auto; }
+@media (prefers-reduced-motion: reduce) { .to-top { transition: none; } }
+
 main { padding-block: 2rem 1rem; }
 /* The home page's hero is a filled band, not just a rule: its bottom edge needs
    more clearance than a plain header before the copy starts, or the two read as
@@ -141,7 +162,7 @@ figcaption { margin-top: .35rem; max-width: var(--measure); color: var(--muted);
    lazily, so there would otherwise be nothing for CSS to reveal. This only has
    to strip the controls and the chrome around them. */
 @media print {
-  .site-header, .site-footer, #filters, #expand-all, #count, .permalink { display: none; }
+  .site-header, .site-footer, .to-top, #filters, #expand-all, #count, .permalink { display: none; }
   .abstract, .card { border: 0; padding-inline: 0; break-inside: avoid; }
   .abstract > summary { list-style: none; padding-inline: 0; }
   .abstract > summary::-webkit-details-marker { display: none; }

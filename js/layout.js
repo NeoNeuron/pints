@@ -60,6 +60,65 @@ export function mountLayout() {
     wrap.textContent = `${SITE_NAME} — ${SITE_TAGLINE}. Logo by majab.com.`;
     footer.replaceChildren(wrap);
   }
+
+  mountToTop();
+}
+
+// Half a viewport, so the button turns up once the header is well gone but
+// before the page has to be two screens tall to ever show it — several pages
+// here sit around 1.5 screens. Relative to the window rather than a pixel count
+// that would be wrong on a phone.
+const TO_TOP_AFTER = () => window.innerHeight / 2;
+
+/**
+ * The floating "back to top" control, bottom right.
+ *
+ * Here rather than in each page module because every page calls mountLayout()
+ * and this is chrome like the header and the footer. 404.html is the one page
+ * that does without: it is served from the requested path, so it cannot import
+ * anything relative (see the comment in that file), and it is one screen long.
+ */
+function mountToTop() {
+  if (document.getElementById("to-top")) return;
+
+  const button = document.createElement("button");
+  button.type = "button";
+  button.id = "to-top";
+  button.className = "to-top";
+  // The glyph is decoration; aria-label is what names the button, so a screen
+  // reader announces "Back to top" rather than "up arrow".
+  button.textContent = "\u2191";
+  button.setAttribute("aria-label", "Back to top");
+  button.title = "Back to top";
+
+  button.addEventListener("click", () => {
+    // Read at click time, not at mount: turning reduced motion on should take
+    // effect without a reload.
+    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    window.scrollTo({ top: 0, behavior: reduced ? "auto" : "smooth" });
+    // Scrolling moves the viewport but not the caret. Without this a keyboard
+    // user is taken to the top and then tabs on from the footer.
+    document.querySelector(".brand")?.focus({ preventScroll: true });
+  });
+
+  document.body.append(button);
+
+  let queued = false;
+  const sync = () => {
+    queued = false;
+    button.classList.toggle("to-top-shown", window.scrollY > TO_TOP_AFTER());
+  };
+  // Coalesced through a frame so a fast scroll writes the class at most once per
+  // frame; passive so it can never delay the scroll itself.
+  window.addEventListener("scroll", () => {
+    if (queued) return;
+    queued = true;
+    requestAnimationFrame(sync);
+  }, { passive: true });
+  window.addEventListener("resize", sync, { passive: true });
+
+  // A page opened at an anchor, or restored by the back button, starts scrolled.
+  sync();
 }
 
 function authLink(href, label) {
