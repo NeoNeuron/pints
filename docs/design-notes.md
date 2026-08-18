@@ -766,6 +766,45 @@ replaced it: `justSaved`, consumed by the next render, and `hasAbstract`, which 
 the whole difference between "submitted" and "updated". A delete clears both, so
 a second attempt is congratulated the same way the first was.
 
+### 7.18 A status that existed only to be a button's return value
+
+`withdrawn` was never a state anyone wanted an abstract to be in. It existed
+because the console's Withdraw button — the only way to un-accept something —
+had to write *some* status, and inventing a fourth one was easier than thinking
+about what the abstract had actually become. It had become what it was before the
+acceptance: waiting on the committee. So the button is **Return to review**, it
+writes `submitted`, and the vocabulary is three states.
+
+Removing a stored value is the part worth writing down, because the obvious move
+is wrong. Deleting `'withdrawn'` from the rule's previous-status allowlist would
+**freeze any document that still holds it** — its owner could no longer write it,
+permanently, because the only path out of a status is an update the rule refuses.
+So the retired value stays in that list, labelled as legacy tolerance, while the
+line below it still pins what may be *written*.
+
+No migration script either. `submissionStatusLabel` already returned "In review"
+for anything it did not recognise — under-claiming was the safe direction when it
+was written, and that decision paid for itself here — so a surviving document
+displays correctly everywhere and normalises the next time anyone saves it. A
+one-off script would have been more risk than the case deserves.
+
+### 7.19 Open rows cannot live in the DOM on a list that re-renders
+
+The review console rebuilds its whole list after every action: accept, reject,
+save a review, delete. That was invisible while every card was expanded. Collapse
+the rows and it becomes the defining bug — accept one abstract and the row you
+were reading slams shut, a hundred times an evening.
+
+So which rows are open is a `Set` of ids held beside `editingId`, updated from
+the `toggle` listener and reapplied on render. `editingId` forces its own row
+open, because the editor is mounted *inside* the body and a closed row would hide
+it completely.
+
+The general shape: **state the user created must not be stored only in nodes you
+are about to replace.** The public list has the same disclosures and needs none of
+this, because nothing re-renders it except a filter change — where losing the open
+rows is correct.
+
 ## 8. Open items
 
 - **Restrict the web API key** and enable App Check (§3.4). Free, console-only.

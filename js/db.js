@@ -276,10 +276,17 @@ export async function publishAbstract(id, abstract, { type, posterNumber, accept
   await batch.commit();
 }
 
-/** Withdraw a published abstract: remove the public copy and mark it withdrawn. */
-export async function unpublishAbstract(id) {
+/**
+ * Un-accept: take the abstract off the public list and put it back in review.
+ *
+ * This used to write a `withdrawn` status, which existed only to be the result
+ * of this one button. Undoing an acceptance leaves the abstract exactly where it
+ * was before the acceptance — waiting on the committee — so that is what it now
+ * says, and the vocabulary is three states instead of four.
+ */
+export async function returnToReview(id) {
   const batch = writeBatch(db);
-  batch.update(doc(db, "abstracts", id), { status: "withdrawn", updatedAt: serverTimestamp() });
+  batch.update(doc(db, "abstracts", id), { status: "submitted", updatedAt: serverTimestamp() });
   batch.delete(doc(db, "abstracts_public", id));
   await batch.commit();
 }

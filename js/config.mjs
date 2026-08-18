@@ -30,7 +30,16 @@ export const LIMITS = {
 // no longer choose: everything is submitted as a poster, and the program
 // committee promotes some of them to talks.
 export const ABSTRACT_TYPES = ["poster", "talk"];
-export const ABSTRACT_STATUSES = ["submitted", "accepted", "rejected", "withdrawn"];
+// "withdrawn" was retired: it existed only so the admin's Withdraw button had
+// somewhere to put an abstract it pulled off the public list, and that action now
+// returns it to review. A document that still holds it reads as "In review"
+// (submissionStatusLabel) and normalises on the next save.
+export const ABSTRACT_STATUSES = ["submitted", "accepted", "rejected"];
+export const STATUS_LABELS = {
+  submitted: "In review",
+  accepted: "Accepted",
+  rejected: "Not accepted",
+};
 
 export const ABSTRACT_TOPICS = ["cognitive", "systems", "computational"];
 export const TOPIC_LABELS = {

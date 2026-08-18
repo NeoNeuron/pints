@@ -174,10 +174,16 @@ service cloud.firestore {
         && request.resource.data.status == 'submitted';
 
       // Frozen on acceptance ONLY. An edit after acceptance would leave
-      // abstracts_public stale and a withdrawal would orphan the published copy.
-      // Rejected and withdrawn stay editable — with one slot per person,
-      // freezing those would mean a rejected participant could never revise,
-      // delete, or replace their submission.
+      // abstracts_public stale. A rejected abstract stays editable — with one
+      // slot per person, freezing it would mean a rejected participant could
+      // never revise, delete, or replace their submission.
+      //
+      // 'withdrawn' is a retired status kept here on purpose. Nothing writes it
+      // any more (the admin's Withdraw button became Return to review, which
+      // writes 'submitted'), but a document from before the change still holds
+      // it, and dropping it from this list would freeze that document out of
+      // its owner's hands forever. Only the PREVIOUS status is tolerated; the
+      // line below still pins what may be written.
       allow update: if isSignedIn() && submissionWindowOpen()
         && isOwner(uid)
         && resource.data.status in ['submitted', 'rejected', 'withdrawn']

@@ -1,5 +1,7 @@
 import { TOPIC_LABELS } from "./config.mjs";
-import { authorLineParts, summaryAuthorLine } from "./abstract-utils.mjs";
+import {
+  authorLineParts, submissionStatusTone, summaryAuthorLine,
+} from "./abstract-utils.mjs";
 import { renderAbstractHtml } from "./markdown.js";
 
 // One abstract, drawn in one place. The public list, the live preview inside the
@@ -65,6 +67,17 @@ function bodyEl(abstract) {
   return body;
 }
 
+/**
+ * The status, in its colour. Exported because the review console shows the same
+ * three states and must not invent its own palette for them.
+ */
+export function statusPill(label, status) {
+  const pill = document.createElement("span");
+  pill.className = `pill status status-${submissionStatusTone(status)}`;
+  pill.textContent = label;
+  return pill;
+}
+
 function topicPill(abstract) {
   if (!abstract.topic) return null;
   const pill = document.createElement("span");
@@ -78,10 +91,7 @@ function metaEl(abstract, { statusLabel, permalink, topic = true }) {
   const meta = document.createElement("p");
   meta.className = "card-meta";
   if (statusLabel) {
-    const pill = document.createElement("span");
-    pill.className = "pill status";
-    pill.textContent = statusLabel;
-    meta.append(pill, " ");
+    meta.append(statusPill(statusLabel, abstract.status), " ");
   }
   const topicEl = topic ? topicPill(abstract) : null;
   if (topicEl) meta.append(topicEl, " ");
@@ -154,59 +164,74 @@ export function abstractCard(abstract, {
 }
 
 /**
- * The same abstract as one row of a long list: title and presenting author,
- * everything else behind a disclosure.
+ * A collapsible row: a summary you always pay for, a body you pay for on first
+ * open.
  *
- * **The body is built on first open, not now.** That is the entire point of this
- * function. A poster session runs to hundreds of abstracts, and a <details> that
- * already contains its <img> still fetches it — collapsed markup is not a
- * deferred download. Building on `toggle` means the page costs one line per
- * abstract until somebody asks for more.
+ * **The lazy body is the whole point.** Collapsed markup is not a deferred
+ * download — a `<details>` that already contains its `<img>` fetches it anyway —
+ * so a list of hundreds has to not build the bodies at all. Both the public
+ * abstract list and the review console are such a list, and they share this
+ * rather than each getting it slightly wrong.
+ *
+ * `summary` is the nodes for the closed row; `buildBody` returns the element to
+ * reveal, and is called at most once.
+ */
+export function disclosureShell({ summary, buildBody, className = "abstract" }) {
+  const details = document.createElement("details");
+  details.className = className;
+
+  const summaryEl = document.createElement("summary");
+  summaryEl.append(...summary);
+  details.append(summaryEl);
+
+  let built = false;
+  // Setting `open` in script fires toggle too, so expand-all, the before-print
+  // handler and the console's restore-open-rows pass come through here as well.
+  details.addEventListener("toggle", () => {
+    if (!details.open || built) return;
+    built = true;
+    details.append(buildBody());
+  });
+  return details;
+}
+
+/**
+ * One abstract as a row of the public list: poster number or talk pill, title,
+ * and the presenting author.
  */
 export function abstractDisclosure(abstract, { permalink = null } = {}) {
-  const details = document.createElement("details");
-  details.className = "abstract";
-
-  const summary = document.createElement("summary");
-  const line = document.createElement("span");
-  line.className = "summary-title";
-  line.append(...headingParts(abstract));
-  summary.append(line);
+  const title = document.createElement("span");
+  title.className = "summary-title";
+  title.append(...headingParts(abstract));
+  const summary = [title];
 
   const authors = summaryAuthorLine(abstract.authors);
   if (authors) {
     const who = document.createElement("span");
     who.className = "summary-authors";
     who.textContent = authors;
-    summary.append(who);
+    summary.push(who);
   }
   // No topic pill: the list groups under topic headings, so every row in a group
   // would carry the same one.
-  details.append(summary);
 
-  let built = false;
-  const build = () => {
-    if (built) return;
-    built = true;
-    const body = document.createElement("div");
-    body.className = "abstract-body";
-    body.append(
-      bylineEl(abstract),
-      affiliationsEl(abstract),
-      bodyEl(abstract),
-      figureEl(abstract),
-      // topic:false — the list prints a topic heading above each group, so a
-      // pill here would repeat it on every row of that group.
-      metaEl(abstract, { statusLabel: null, permalink, topic: false }),
-    );
-    details.append(body);
-  };
-  // Setting `open` in script fires toggle too, so expand-all and the
-  // before-print handler come through here as well.
-  details.addEventListener("toggle", () => {
-    if (details.open) build();
+  return disclosureShell({
+    summary,
+    buildBody: () => {
+      const body = document.createElement("div");
+      body.className = "abstract-body";
+      body.append(
+        bylineEl(abstract),
+        affiliationsEl(abstract),
+        bodyEl(abstract),
+        figureEl(abstract),
+        // topic:false — the list prints a topic heading above each group, so a
+        // pill here would repeat it on every row of that group.
+        metaEl(abstract, { statusLabel: null, permalink, topic: false }),
+      );
+      return body;
+    },
   });
-  return details;
 }
 
 /** Where an accepted abstract lives, for sharing. Relative, like every link here. */

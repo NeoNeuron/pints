@@ -39,13 +39,20 @@ export async function mountSubmissionCard(host, abstract, { onEdit }) {
 
   const actions = document.createElement("div");
   actions.className = "actions";
+  // Keyed on the status, not on the public copy: a half-finished acceptance —
+  // status set, abstracts_public not yet written — must lock too, which is
+  // exactly how `frozen` decides it in the form behind this button. Offering an
+  // editor that then refuses to save anything is worse than not offering one.
+  const frozen = abstract.status === "accepted";
+
   const edit = document.createElement("button");
   edit.type = "button";
   edit.textContent = "Edit submission";
+  edit.disabled = frozen;
   edit.addEventListener("click", () => onEdit());
   actions.append(edit);
 
-  if (published) {
+  if (frozen) {
     const note = document.createElement("span");
     note.className = "muted";
     note.textContent = "Accepted abstracts are frozen — ask an organizer to change one.";

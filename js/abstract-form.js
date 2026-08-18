@@ -309,8 +309,8 @@ export async function mountAbstractForm(
   }
 
   // Only an accepted abstract is locked, matching the rules: its public copy
-  // would otherwise go stale. Rejected and withdrawn stay editable so the
-  // participant can revise and resubmit before the deadline.
+  // would otherwise go stale. A rejected one stays editable so the participant
+  // can revise and resubmit before the deadline.
   //
   // The exemption is keyed on `republish`, NOT on isAdmin. An accepted abstract
   // is editable exactly when the caller has wired up the public-copy rewrite,
@@ -340,8 +340,6 @@ export async function mountAbstractForm(
     notice("Submissions are closed. You can still read your abstract.");
   } else if (abstract?.status === "rejected") {
     notice("This abstract was not accepted. You can revise and resubmit it before the deadline.");
-  } else if (abstract?.status === "withdrawn") {
-    notice("This abstract was withdrawn by the organizers. You can revise and resubmit it before the deadline.");
   }
 
   // The contact block appears whenever the caller offered `ensureAccount` — for a

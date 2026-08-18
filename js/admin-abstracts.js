@@ -1,12 +1,17 @@
-import { ABSTRACT_STATUSES, ABSTRACT_TOPICS, ABSTRACT_TYPES, TOPIC_LABELS } from "./config.mjs";
+import {
+  ABSTRACT_STATUSES, ABSTRACT_TOPICS, ABSTRACT_TYPES, STATUS_LABELS, TOPIC_LABELS,
+} from "./config.mjs";
 import {
   authorLineParts, filterAdminAbstracts, groupByTopic, nextPosterNumber,
+  submissionStatusLabel, summaryAuthorLine,
 } from "./abstract-utils.mjs";
+import { disclosureShell, statusPill } from "./abstract-card.js";
 import {
   ABSTRACT_EXPORT_COLUMNS, abstractExportRows, annotateAbstracts,
 } from "./abstract-export-utils.mjs";
 import {
   describeReviewStats, reviewScoreMatrix, reviewStats, reviewerList, scoreOptions,
+  summariseScore,
 } from "./review-utils.mjs";
 import { abstractDeletionPlan, describeAbstractDeletion } from "./deletion-utils.mjs";
 import { renderAbstractHtml } from "./markdown.js";
@@ -25,7 +30,7 @@ import {
   recordDecision,
   saveMyReview,
   setAbstractStatus,
-  unpublishAbstract,
+  returnToReview,
 } from "./db.js";
 
 /** Author names with superscript affiliation marks, presenting author in bold. */
@@ -92,6 +97,10 @@ export async function mountAbstractsTab(host, { adminUid, user }) {
   // either silently discarding the other.
   let editingId = null;
 
+  // Which rows the organizer has open. Kept here rather than read off the DOM
+  // because render() replaces every node, and the state has to outlive them.
+  const openIds = new Set();
+
   const filters = { q: "", status: "", type: "", topic: "", talk: "" };
 
   // What the last render fetched. The export buttons read it rather than
@@ -118,7 +127,7 @@ export async function mountAbstractsTab(host, { adminUid, user }) {
     const status = picker({
       label: "Status",
       options: [{ value: "", label: "Any status" },
-        ...ABSTRACT_STATUSES.map((s) => ({ value: s, label: s }))],
+        ...ABSTRACT_STATUSES.map((s) => ({ value: s, label: STATUS_LABELS[s] ?? s }))],
     });
 
     // Poster vs talk lives on the published copy, so "not published yet" is one
@@ -289,16 +298,54 @@ export async function mountAbstractsTab(host, { adminUid, user }) {
     return section;
   }
 
+  /**
+   * One row of the review console: the decision, the title, who submitted it,
+   * and how it scored — the four things a decision meeting reads off the list
+   * without opening anything.
+   */
+  function row(abstract, published, refresh) {
+    const stats = reviewStats(reviewsById.get(abstract.id)?.reviews);
+
+    const title = document.createElement("span");
+    title.className = "summary-title";
+    title.textContent = abstract.title ?? "(untitled)";
+
+    const who = document.createElement("span");
+    who.className = "summary-authors";
+    who.textContent = summaryAuthorLine(abstract.authors);
+
+    const score = document.createElement("span");
+    score.className = "summary-score";
+    score.textContent = summariseScore(stats);
+
+    const details = disclosureShell({
+      className: "abstract admin-abstract",
+      summary: [
+        statusPill(submissionStatusLabel(abstract.status, {
+          type: abstract.publicType, posterNumber: abstract.posterNumber,
+        }), abstract.status),
+        title,
+        who,
+        score,
+      ],
+      buildBody: () => card(abstract, published, refresh),
+    });
+
+    // Open rows survive the re-render that follows every action on this tab.
+    // Without this, accepting one abstract slams shut whatever the organizer was
+    // reading, which on a hundred-row list is worse than the long page was.
+    details.addEventListener("toggle", () => {
+      if (details.open) openIds.add(abstract.id);
+      else openIds.delete(abstract.id);
+    });
+    // The editor lives inside the body, so a row holding it cannot be closed.
+    if (openIds.has(abstract.id) || editingId === abstract.id) details.open = true;
+    return details;
+  }
+
   function card(abstract, published, refresh) {
-    const article = document.createElement("article");
-    article.className = "card";
-
-    const h3 = document.createElement("h3");
-    h3.textContent = abstract.title ?? "(untitled)";
-
-    const byline = document.createElement("p");
-    byline.className = "byline";
-    byline.append(authorsLine(abstract));
+    const article = document.createElement("div");
+    article.className = "abstract-body";
 
     const from = document.createElement("p");
     from.className = "muted";
@@ -307,17 +354,22 @@ export async function mountAbstractsTab(host, { adminUid, user }) {
         + ` (${abstract.submitterEmail || "no email"})`
       : `Submitted by uid ${abstract.ownerUid}`;
 
+    // The full author line: the summary above carries only the presenting one.
+    const byline = document.createElement("p");
+    byline.className = "byline";
+    byline.append(authorsLine(abstract));
+
     const affil = document.createElement("p");
     affil.className = "byline";
     affil.textContent = (abstract.affiliations ?? [])
       .map((a, i) => `${i + 1}. ${a}`).join("   ");
 
     const meta = document.createElement("p");
-    for (const label of [TOPIC_LABELS[abstract.topic] ?? abstract.topic, abstract.status]) {
-      if (!label) continue;
+    const topic = TOPIC_LABELS[abstract.topic] ?? abstract.topic;
+    if (topic) {
       const pill = document.createElement("span");
       pill.className = "pill";
-      pill.textContent = label;
+      pill.textContent = topic;
       meta.append(pill, " ");
     }
     if (abstract.talkConsidered === false) {
@@ -442,11 +494,14 @@ export async function mountAbstractsTab(host, { adminUid, user }) {
       say(`Rejected “${abstract.title}”. The submitter can revise and resubmit.`, "warn");
     });
 
-    const pull = guarded("Withdraw", "danger", async () => {
-      await unpublishAbstract(abstract.id);
-      say(`Withdrew “${abstract.title}”.`, "warn");
+    // Undoing an acceptance, not a fourth status: the abstract goes back to
+    // where it was before the committee touched it. `secondary`, not `danger` —
+    // it is reversible in one click, and red should keep meaning Delete.
+    const pull = guarded("Return to review", "secondary", async () => {
+      await returnToReview(abstract.id);
+      say(`“${abstract.title}” is back in review and off the public list.`, "warn");
     });
-    pull.title = "Remove this abstract from the public list";
+    pull.title = "Remove this abstract from the public list and undo the acceptance";
     pull.hidden = abstract.status !== "accepted";
 
     const edit = document.createElement("button");
@@ -472,7 +527,7 @@ export async function mountAbstractsTab(host, { adminUid, user }) {
     editHost.className = "panel";
     editHost.hidden = true;
 
-    article.append(h3, byline, from, affil, meta, body, figure,
+    article.append(byline, from, affil, meta, body, figure,
       reviewBlock(abstract), actions, editHost);
 
     if (editingId === abstract.id) {
@@ -554,9 +609,12 @@ export async function mountAbstractsTab(host, { adminUid, user }) {
 
     const counts = {};
     for (const a of abstracts) counts[a.status] = (counts[a.status] ?? 0) + 1;
+    // Anything not decided is in review, which sweeps up a legacy `withdrawn`
+    // rather than leaving it uncounted.
+    const decided = (counts.accepted ?? 0) + (counts.rejected ?? 0);
     const totals =
-      `${abstracts.length} submitted · ${counts.accepted ?? 0} accepted · ` +
-      `${counts.rejected ?? 0} rejected · ${counts.withdrawn ?? 0} withdrawn`;
+      `${abstracts.length} abstracts · ${counts.accepted ?? 0} accepted · ` +
+      `${counts.rejected ?? 0} not accepted · ${abstracts.length - decided} in review`;
     summary.textContent = shown.length === abstracts.length
       ? totals
       : `${totals} — showing ${shown.length}`;
@@ -573,7 +631,7 @@ export async function mountAbstractsTab(host, { adminUid, user }) {
       heading.textContent =
         `${topic ? TOPIC_LABELS[topic] ?? topic : "Other"} (${items.length})`;
       listEl.append(heading);
-      for (const a of items) listEl.append(card(a, published, render));
+      for (const a of items) listEl.append(row(a, published, render));
     }
 
     emptyEl.textContent = !abstracts.length ? "No abstracts have been submitted yet."

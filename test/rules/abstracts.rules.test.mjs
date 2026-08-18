@@ -168,11 +168,38 @@ test("an owner can revise and resubmit after a rejection", async () => {
     abstract({ status: "submitted", title: "Revised after review" })));
 });
 
-test("an owner can resubmit after an admin withdrawal", async () => {
+test("an owner can still edit a document left on the retired 'withdrawn' status", async () => {
+  // Nothing writes 'withdrawn' any more — the admin's button now writes
+  // 'submitted' — but a document from before the change must not be frozen out
+  // of its owner's hands. The rule tolerates it as a PREVIOUS status only.
   await seedConfig(env);
   await seed(env, (fs) => setDoc(doc(fs, "abstracts", "alice"), abstract({ status: "withdrawn" })));
   await assertSucceeds(setDoc(doc(asUser(env, "alice"), "abstracts", "alice"),
     abstract({ status: "submitted", title: "Back again" })));
+});
+
+test("an owner still cannot write a status of their own choosing", async () => {
+  await seedConfig(env);
+  await seed(env, (fs) => setDoc(doc(fs, "abstracts", "alice"), abstract({ status: "submitted" })));
+  const fs = asUser(env, "alice");
+  for (const status of ["accepted", "rejected", "withdrawn"]) {
+    await assertFails(setDoc(doc(fs, "abstracts", "alice"), abstract({ status })));
+  }
+});
+
+test("returning an accepted abstract to review is an admin write", async () => {
+  // What the console's "Return to review" button does: status back to
+  // submitted, public copy gone. Both halves are admin-only.
+  await seedAdmin(env, "boss");
+  await seed(env, async (fs) => {
+    await setDoc(doc(fs, "abstracts", "alice"), abstract({ status: "accepted" }));
+    await setDoc(doc(fs, "abstracts_public", "alice"), { edition: "pints2026", title: "T" });
+  });
+  await assertFails(updateDoc(doc(asUser(env, "alice"), "abstracts", "alice"),
+    { status: "submitted" }));
+  const boss = asUser(env, "boss");
+  await assertSucceeds(updateDoc(doc(boss, "abstracts", "alice"), { status: "submitted" }));
+  await assertSucceeds(deleteDoc(doc(boss, "abstracts_public", "alice")));
 });
 
 test("an owner can delete an abstract that has not been accepted", async () => {

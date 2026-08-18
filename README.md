@@ -129,10 +129,18 @@ A **figure and a caption are both required**, enforced in
 through `allow write: if isAdmin()` skip the check, so a record that predates the
 requirement can still be repaired.
 
-Only an **accepted** abstract is frozen to its owner. Rejected and withdrawn stay
-editable, and with a single slot per person that matters more than it used to: a
-rejected participant would otherwise be unable to revise, delete, or replace
-their submission, because there is nowhere else to put a second attempt.
+There are **three statuses**: `submitted` (shown as "In review"), `accepted` and
+`rejected` ("Not accepted"). `withdrawn` was retired — it existed only so the
+admin's Withdraw button had somewhere to put an abstract it pulled off the public
+list, and that button is now **Return to review**, which writes `submitted`. A
+document that still holds the old value reads as "In review" and normalises on
+its next save.
+
+Only an **accepted** abstract is frozen to its owner: the participant's "Edit
+submission" button is disabled and the form behind it is read-only. A rejected one
+stays editable, and with a single slot per person that matters more than it used
+to — a rejected participant would otherwise be unable to revise, delete, or
+replace their submission, because there is nowhere else to put a second attempt.
 
 ### One renderer, four places
 
@@ -222,7 +230,13 @@ waits for verification.
 
 ## Reviewing abstracts
 
-The Abstracts tab filters on free text, status, presentation (talk / poster / not
+The Abstracts tab collapses to one row per abstract — the coloured status pill,
+the title, the presenting author, and the mean score with how many organizers
+scored it — because the review screen has to survive the same hundreds the public
+list does. Rows open in place, their bodies built on first open, and **open rows
+survive the re-render** that follows every accept, reject and review save.
+
+It filters on free text, status, presentation (talk / poster / not
 published yet), the submitter's **talk opt-out**, and topic, and both CSV exports
 cover exactly what the filters are showing — the button row says so when they are narrower than the whole pile.
 

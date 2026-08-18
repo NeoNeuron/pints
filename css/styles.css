@@ -97,9 +97,15 @@ figcaption { margin-top: .35rem; max-width: var(--measure); color: var(--muted);
 /* Status, topic and the share link share one line above the byline. */
 .card .card-meta { margin: 0 0 .5rem; }
 .card .card-meta:empty { display: none; }
-/* The decision, not a label: it reads as a statement about this abstract, so it
-   takes the accent rather than the neutral chrome the topic pill uses. */
-.pill.status { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); font-weight: 600; }
+/* The decision, not a label: a status pill is a statement about this abstract,
+   so it is the one pill that carries colour. The three tones reuse the --ok /
+   --warn / --err tokens and the tints .msg already uses, so nothing new enters
+   the palette. Undecided is amber rather than grey because "waiting on us" is a
+   state the committee should see, not a default. */
+.pill.status { font-weight: 600; }
+.pill.status-review { border-color: var(--warn); color: var(--warn); background: #fdf6e7; }
+.pill.status-accepted { border-color: var(--ok); color: var(--ok); background: #eef7f1; }
+.pill.status-rejected { border-color: var(--err); color: var(--err); background: #fbeeee; }
 .permalink { font-size: .85rem; }
 
 /* The public abstract list: one row per abstract, body behind a disclosure.
@@ -118,6 +124,13 @@ figcaption { margin-top: .35rem; max-width: var(--measure); color: var(--muted);
 .abstract .summary-authors { color: var(--muted); font-size: .92rem; }
 .abstract .abstract-body { padding: .75rem 1rem 1rem; }
 .abstract .abstract-body > .byline:first-child { margin-top: 0; }
+
+/* The review console reuses the public list's row, plus the one number a
+   decision meeting sorts on. Pushed to the end so the titles stay left-aligned
+   however long the author line runs. */
+.admin-abstract .summary-score { margin-left: auto; color: var(--muted); font-size: .9rem; white-space: nowrap; }
+.admin-abstract > summary { gap: .35rem .6rem; }
+.admin-abstract .actions { margin-top: 1rem; }
 
 .topic-heading { margin: 2rem 0 .75rem; font-size: 1.15rem; }
 .topic-heading .muted { font-weight: 400; font-size: .9rem; }

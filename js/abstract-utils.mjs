@@ -169,6 +169,19 @@ export function submissionStatusLabel(status, published = null) {
     return "Accepted";
   }
   if (status === "rejected") return "Not accepted";
-  if (status === "withdrawn") return "Withdrawn";
   return "In review";
+}
+
+/**
+ * Which of the three colours the status pill takes.
+ *
+ * Split from the label rather than returned with it so the label stays a plain
+ * string for the dozen places that only want the words. The two agree by
+ * construction: everything that is not a decision is "review", which is also
+ * what a legacy `withdrawn` document lands on.
+ */
+export function submissionStatusTone(status) {
+  if (status === "accepted") return "accepted";
+  if (status === "rejected") return "rejected";
+  return "review";
 }

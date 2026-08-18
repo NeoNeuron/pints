@@ -9,6 +9,7 @@ import {
   nextPosterNumber,
   sortPublicAbstracts,
   submissionStatusLabel,
+  submissionStatusTone,
   summaryAuthorLine,
 } from "../js/abstract-utils.mjs";
 
@@ -261,7 +262,6 @@ test("the talk filter combines with the others", () => {
 test("submissionStatusLabel names the decision once one has been taken", () => {
   assert.equal(submissionStatusLabel("submitted"), "In review");
   assert.equal(submissionStatusLabel("rejected"), "Not accepted");
-  assert.equal(submissionStatusLabel("withdrawn"), "Withdrawn");
   assert.equal(submissionStatusLabel("accepted", { type: "talk" }), "Accepted as a talk");
   assert.equal(submissionStatusLabel("accepted", { type: "poster" }), "Accepted as a poster");
   assert.equal(
@@ -315,5 +315,25 @@ test("summaryAuthorLine ignores blank names, including when counting", () => {
 test("summaryAuthorLine says nothing about an abstract with no authors", () => {
   for (const empty of [[], null, undefined, [{}], [{ name: "" }]]) {
     assert.equal(summaryAuthorLine(empty), "", `expected "" for ${JSON.stringify(empty)}`);
+  }
+});
+
+test("submissionStatusLabel reads a retired 'withdrawn' as In review", () => {
+  // The status was removed; a document that still holds it must read as the
+  // state it will normalise to on the next save, not as a fourth thing.
+  assert.equal(submissionStatusLabel("withdrawn"), "In review");
+  assert.equal(submissionStatusTone("withdrawn"), "review");
+});
+
+test("submissionStatusTone gives each decision its colour", () => {
+  assert.equal(submissionStatusTone("submitted"), "review");
+  assert.equal(submissionStatusTone("accepted"), "accepted");
+  assert.equal(submissionStatusTone("rejected"), "rejected");
+});
+
+test("submissionStatusTone falls back to review, like the label", () => {
+  for (const odd of ["", null, undefined, "banquet"]) {
+    assert.equal(submissionStatusTone(odd), "review");
+    assert.equal(submissionStatusLabel(odd), "In review");
   }
 });

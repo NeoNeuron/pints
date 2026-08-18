@@ -58,6 +58,18 @@ export function describeReviewStats({ mean, count }, reviewerCount) {
 }
 
 /**
+ * "7.3 · 3 scored" — the same two numbers as describeReviewStats, short enough
+ * to sit in a collapsed list row beside a title.
+ *
+ * `count` is how many organizers put a number on it, which is not how many
+ * wrote something: a note without a score is an opinion, not a vote.
+ */
+export function summariseScore({ mean, count } = {}) {
+  if (!count) return "not scored";
+  return `${mean.toFixed(1)} · ${count} scored`;
+}
+
+/**
  * The whole committee's scores as a spreadsheet: one row per abstract, one
  * column per organizer, then the mean and how many scored it.
  *

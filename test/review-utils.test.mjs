@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   describeReviewStats, isScore, reviewScoreMatrix, reviewStats, reviewerList, scoreOptions,
+  summariseScore,
 } from "../js/review-utils.mjs";
 import { toCsv } from "../js/csv-utils.mjs";
 
@@ -135,4 +136,21 @@ test("the matrix feeds toCsv unchanged", () => {
   const [header, first] = csv.trim().split("\r\n");
   assert.equal(header, "Title,Topic,Status,Presentation,Submitted by,Ada Boss,Olivia Nero,Mean,Scores");
   assert.equal(first, "Recurrent dynamics,systems,accepted,talk,Alice Dupont,9,8,8.5,2");
+});
+
+test("summariseScore fits the mean and the count into a list row", () => {
+  assert.equal(summariseScore({ mean: 7.3, count: 3 }), "7.3 · 3 scored");
+  assert.equal(summariseScore({ mean: 9, count: 1 }), "9.0 · 1 scored");
+});
+
+test("summariseScore says so when nobody has scored", () => {
+  assert.equal(summariseScore({ mean: null, count: 0 }), "not scored");
+  assert.equal(summariseScore({}), "not scored");
+  assert.equal(summariseScore(), "not scored");
+});
+
+test("summariseScore takes reviewStats output directly", () => {
+  const stats = reviewStats({ a: { score: 8 }, b: { score: 7 }, c: { note: "no number" } });
+  // Three organizers said something, two put a number on it.
+  assert.equal(summariseScore(stats), "7.5 · 2 scored");
 });
