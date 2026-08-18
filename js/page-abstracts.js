@@ -69,13 +69,20 @@ function card(abstract) {
 
   // Built with createElement, never through the markdown renderer:
   // ABSTRACT_ALLOWLIST forbids <img> in a submitted body and must keep doing so.
-  const figure = document.createElement("p");
+  // The caption is participant input too, so it goes in as text, not markup.
+  const figure = document.createElement("figure");
   if (abstract.figureUrl) {
     const img = document.createElement("img");
     img.src = abstract.figureUrl;
-    img.alt = `Figure for “${abstract.title ?? "this abstract"}”`;
+    img.alt = abstract.figureCaption
+      || `Figure for “${abstract.title ?? "this abstract"}”`;
     img.loading = "lazy";
     figure.append(img);
+    if (abstract.figureCaption) {
+      const caption = document.createElement("figcaption");
+      caption.textContent = abstract.figureCaption;
+      figure.append(caption);
+    }
   }
 
   article.append(h3, meta, byline, affil, body, figure);

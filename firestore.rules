@@ -19,10 +19,6 @@ service cloud.firestore {
 
     function isOwner(uid) { return isSignedIn() && request.auth.uid == uid; }
 
-    function isVerified() {
-      return isSignedIn() && request.auth.token.email_verified == true;
-    }
-
     function isAdmin() {
       return isSignedIn()
         && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
@@ -44,19 +40,25 @@ service cloud.firestore {
       return cfg.submissionsOpen == true && request.time < cfg.submissionDeadline;
     }
 
+    // The figure and its caption are REQUIRED: a poster abstract without one is
+    // not usable in the booklet, and a figure nobody captioned is not usable
+    // either. Organizers writing through `allow write: if isAdmin()` skip this,
+    // so a record that predates the rule can still be repaired.
     function validAbstract(data, uid) {
       return data.keys().hasOnly(['ownerUid', 'edition', 'title', 'affiliations', 'authors',
                                   'body', 'topic', 'talkConsidered', 'figureUrl', 'figurePath',
-                                  'status', 'createdAt', 'updatedAt'])
+                                  'figureCaption', 'status', 'createdAt', 'updatedAt'])
         && data.keys().hasAll(['ownerUid', 'edition', 'title', 'affiliations', 'authors',
-                               'body', 'topic', 'talkConsidered', 'status'])
+                               'body', 'topic', 'talkConsidered', 'figureUrl',
+                               'figureCaption', 'status'])
         && data.ownerUid == uid
         && data.edition is string
         && str(data.title, 200)
         && str(data.body, 2500)
         && data.topic in ['cognitive', 'systems', 'computational']
         && data.talkConsidered is bool
-        && (!('figureUrl' in data) || data.figureUrl == null || str(data.figureUrl, 500))
+        && str(data.figureUrl, 500)
+        && str(data.figureCaption, 300)
         && (!('figurePath' in data) || data.figurePath == null || str(data.figurePath, 300))
         && data.authors is list && data.authors.size() > 0 && data.authors.size() <= 20
         && data.affiliations is list && data.affiliations.size() <= 10;
@@ -138,34 +140,46 @@ service cloud.firestore {
       allow delete: if isOwner(uid) || isAdmin();
     }
 
-    // Many abstracts per participant, so the document id is an auto-id and
-    // ownership lives in the ownerUid field.
+    // ONE abstract per participant, and the document id IS their uid. That is
+    // what makes the limit real rather than advisory: there is no second slot to
+    // create, so no rule has to count anything, and Firestore rules cannot count
+    // documents anyway. The ownerUid field stays because the admin console joins
+    // submitter details on it and the delete callable queries it.
     //
-    // `list` is evaluated once per candidate document, which means a query that
-    // does NOT filter on ownerUid is rejected outright for a non-admin. That is
-    // load-bearing: it is the only thing stopping a signed-in user from reading
-    // the whole submission pile. db.js listMyAbstracts() filters accordingly.
-    match /abstracts/{abstractId} {
-      allow get, list: if isAdmin()
-        || (isSignedIn() && resource.data.ownerUid == request.auth.uid);
+    // `list` is admins only. A participant reads their own with a direct get, so
+    // there is nothing a query would buy them except a route into everybody
+    // else's submissions.
+    match /abstracts/{uid} {
+      allow get: if isOwner(uid) || isAdmin();
+      allow list: if isAdmin();
 
-      allow create: if isVerified() && submissionWindowOpen()
-        && isOwner(request.resource.data.ownerUid)
-        && validAbstract(request.resource.data, request.auth.uid)
+      // Signed in and the owner, NOT verified. Submitting used to require a
+      // verified address and that gate was wrong twice over: institutional mail
+      // filters quarantine the verification message (measured, see the README),
+      // and somebody submitting without an account first is never verified —
+      // their account is seconds old. What an unproven address would actually
+      // harm is the PUBLIC participant list, and that still waits for it.
+      //
+      // What still stands between this and the open internet: a Firebase account
+      // per submission, one abstract per account, the submission window, and a
+      // figure. The address is proved by the "set your password" mail we send.
+      allow create: if isSignedIn() && submissionWindowOpen()
+        && isOwner(uid)
+        && validAbstract(request.resource.data, uid)
         && request.resource.data.status == 'submitted';
 
       // Frozen on acceptance ONLY. An edit after acceptance would leave
       // abstracts_public stale and a withdrawal would orphan the published copy.
-      // Rejected and withdrawn stay editable so the participant can revise and
-      // resubmit before the deadline.
-      allow update: if isVerified() && submissionWindowOpen()
-        && isOwner(resource.data.ownerUid)
-        && request.resource.data.ownerUid == resource.data.ownerUid
+      // Rejected and withdrawn stay editable — with one slot per person,
+      // freezing those would mean a rejected participant could never revise,
+      // delete, or replace their submission.
+      allow update: if isSignedIn() && submissionWindowOpen()
+        && isOwner(uid)
         && resource.data.status in ['submitted', 'rejected', 'withdrawn']
         && request.resource.data.status == 'submitted'
-        && validAbstract(request.resource.data, request.auth.uid);
+        && validAbstract(request.resource.data, uid);
 
-      allow delete: if isOwner(resource.data.ownerUid) && resource.data.status != 'accepted';
+      allow delete: if isOwner(uid) && resource.data.status != 'accepted';
 
       allow write: if isAdmin();
     }
@@ -198,6 +212,26 @@ service cloud.firestore {
     match /schedule/{itemId} {
       allow read: if true;
       allow create, update: if isAdmin() && validScheduleItem(request.resource.data);
+      allow delete: if isAdmin();
+    }
+
+    // Photographs of previous editions, listed from a Dropbox folder by the
+    // syncDropboxGallery callable and cached here so the public page reads
+    // Firestore rather than calling a function on every visit.
+    //
+    // World-readable, because the archive page works signed out. Admin write
+    // only, and the shape is checked: the sync writes this, but so does the
+    // caption editor, and a public page renders whatever ends up here.
+    match /gallery/{year} {
+      allow read: if true;
+      allow write: if isAdmin()
+        && request.resource.data.keys().hasOnly(['year', 'folderUrl', 'photos',
+                                                 'syncedAt', 'syncedBy'])
+        && request.resource.data.keys().hasAll(['year', 'photos'])
+        && request.resource.data.year is int
+        && request.resource.data.photos is list
+        && request.resource.data.photos.size() <= 200
+        && optStr(request.resource.data, 'folderUrl', 500);
       allow delete: if isAdmin();
     }
 

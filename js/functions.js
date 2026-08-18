@@ -36,7 +36,8 @@ function explain(err, fallback) {
     return err.message;
   }
   if (code.endsWith("internal") || code.endsWith("unavailable")) {
-    return `${fallback} The deletion service may not be deployed yet.`;
+    return `${fallback} The service may not be deployed yet — see “Deploying the `
+      + `callables” in the README.`;
   }
   return fallback;
 }
@@ -59,3 +60,14 @@ export const deleteAbstractCompletely = (abstractId) =>
 /** Delete a participant: their abstracts, their profile, and their login. */
 export const deleteParticipant = (uid) =>
   call("deleteParticipant", { uid }, "Could not delete the participant.");
+
+/**
+ * Re-read a Dropbox folder and cache its photographs in gallery/{year}.
+ *
+ * A shared folder cannot be listed from a browser: every Dropbox listing
+ * endpoint needs an Authorization header, and a static site has nowhere safe to
+ * keep one. The token lives in the callable, and the result lands in Firestore
+ * so the public archive page reads a document rather than calling this.
+ */
+export const syncDropboxGallery = (year, folderUrl) =>
+  call("syncDropboxGallery", { year, folderUrl }, "Could not sync the photos from Dropbox.");

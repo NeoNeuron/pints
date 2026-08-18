@@ -1,15 +1,16 @@
 import {
   deleteObject,
   getDownloadURL,
-  getStorage,
   ref,
   uploadBytes,
 } from "https://www.gstatic.com/firebasejs/12.16.0/firebase-storage.js";
-import { app } from "./firebase.js";
+// The shared instance, not a second getStorage(app): only that one has been
+// pointed at the emulator when a page asks for it.
+import { storage } from "./firebase.js";
 import { FIGURE } from "./config.mjs";
 import { figurePath, outputType, targetSize } from "./figure-utils.mjs";
 
-export const storage = getStorage(app);
+export { storage };
 
 /**
  * Downscale in a canvas before upload.

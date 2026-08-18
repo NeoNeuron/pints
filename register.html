@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Create an account — PINTS</title>
+<meta name="description" content="Register for PINTS. Free, and it puts you on the participant list.">
+<link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+<header id="site-header"></header>
+<main class="wrap">
+  <h1>Create an account</h1>
+  <p class="prose muted">Registration is free. Once you confirm your email address
+    your name goes on the public <a href="participants.html">participant list</a>,
+    and you can submit an abstract.</p>
+
+  <div id="msg" class="msg" role="status" aria-live="polite"></div>
+
+  <form id="register-form" novalidate>
+    <label for="displayName">Full name
+      <span class="hint">As you want it to appear on the participant list.</span>
+    </label>
+    <input id="displayName" type="text" maxlength="80" autocomplete="name" required>
+
+    <label for="affiliation">Affiliation
+      <span class="hint">Lab, institute, or university.</span>
+    </label>
+    <input id="affiliation" type="text" maxlength="120" autocomplete="organization" required>
+
+    <label for="email">Email
+      <span class="hint">Use your institutional address if you have one. We send a
+        confirmation link here.</span>
+    </label>
+    <input id="email" type="email" autocomplete="email" required>
+
+    <label for="password">Password
+      <span class="hint">At least 6 characters.</span>
+    </label>
+    <input id="password" type="password" autocomplete="new-password" required>
+
+    <div class="checkline">
+      <input id="remember" type="checkbox" checked>
+      <label for="remember">Remember me on this device</label>
+    </div>
+
+    <div class="actions">
+      <button id="register" type="submit">Create my account</button>
+      <a class="button secondary" id="to-login" href="login.html">I already have one</a>
+    </div>
+  </form>
+</main>
+<footer id="site-footer"></footer>
+<script type="module" src="js/page-register.js"></script>
+</body>
+</html>

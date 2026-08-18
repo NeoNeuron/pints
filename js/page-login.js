@@ -1,6 +1,7 @@
 import { mountLayout, setAuthLink } from "./layout.js";
 import { warnIfUnconfigured } from "./firebase.js";
-import { friendlyAuthError, onUser, sendReset, signIn, signUp } from "./auth.js";
+import { friendlyAuthError, onUser, sendReset, signIn } from "./auth.js";
+import { destinationAfterAuth, withNext } from "./redirect-utils.mjs";
 
 mountLayout();
 
@@ -10,6 +11,14 @@ const emailEl = document.getElementById("email");
 const passwordEl = document.getElementById("password");
 const rememberEl = document.getElementById("remember");
 const buttons = [...document.querySelectorAll("#auth-form button")];
+
+// Whatever page sent us here has to survive the detour through registering, so
+// both routes onwards carry it.
+const next = new URLSearchParams(location.search).get("next");
+for (const id of ["to-register", "register-link"]) {
+  const link = document.getElementById(id);
+  if (link) link.href = withNext("register.html", next);
+}
 
 function say(text, kind = "ok") {
   msg.className = `msg ${kind}`;
@@ -35,51 +44,15 @@ async function run(fn) {
 if (warnIfUnconfigured(msg)) {
   form.hidden = true;
 } else {
-  // Signing up changes auth state, which would immediately redirect and discard
-  // the "check your inbox" message. Hold the user here until they move on.
-  let justSignedUp = false;
-
   onUser(({ user, isAdmin }) => {
     setAuthLink({ signedIn: Boolean(user), isAdmin });
-    if (user && !justSignedUp) location.replace(isAdmin ? "admin.html" : "account.html");
+    if (user) location.replace(destinationAfterAuth(next, { isAdmin }));
   });
 
   form.addEventListener("submit", (e) => {
     e.preventDefault();
     run(() => signIn(emailEl.value.trim(), passwordEl.value, rememberEl.checked));
   });
-
-  document.getElementById("signup").addEventListener("click", () =>
-    run(async () => {
-      justSignedUp = true;
-      const { verificationSent } = await signUp(
-        emailEl.value.trim(), passwordEl.value, rememberEl.checked);
-
-      const link = document.createElement("a");
-      link.href = "account.html";
-      link.textContent = "complete your registration";
-
-      if (verificationSent) {
-        msg.className = "msg ok";
-        msg.replaceChildren(
-          document.createTextNode(
-            "Account created. Check your inbox — and your spam folder — for a verification link, then "),
-          link,
-          document.createTextNode("."),
-        );
-      } else {
-        // The account exists; only the mail failed. Say so, or they will try to
-        // sign up again and hit "email already in use".
-        msg.className = "msg warn";
-        msg.replaceChildren(
-          document.createTextNode(
-            "Account created, but the verification email could not be sent. "
-            + "You are signed in — "),
-          link,
-          document.createTextNode(" and use “Resend the verification email” there."),
-        );
-      }
-    }));
 
   document.getElementById("reset").addEventListener("click", () =>
     run(async () => {
