@@ -1,8 +1,8 @@
 import { marked } from "../vendor/marked.esm.js";
 import createDOMPurify from "../vendor/purify.es.mjs";
-import { renderAbstract, renderPage } from "./markdown-render-utils.mjs";
+import { installStyleFilter, renderAbstract, renderPage } from "./markdown-render-utils.mjs";
 
-const purify = createDOMPurify(window);
+const purify = installStyleFilter(createDOMPurify(window));
 const deps = {
   parse: (src) => marked.parse(src),
   sanitize: (html, config) => purify.sanitize(html, config),

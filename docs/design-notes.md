@@ -536,6 +536,45 @@ Two details worth keeping if this is ever rewritten:
   running cost of this site is nil; a poller is the easiest way to make that
   quietly untrue.
 
+### 7.10 Page copy may contain HTML; the `style` attribute is filtered, not trusted
+
+Organizers asked to colour a word on the home page. Markdown has no syntax for
+that, and the sanitizer was stripping the HTML they tried, so nothing they could
+type in the editor would do it.
+
+The fix is two changes to `PAGE_ALLOWLIST`: `span`, `div`, `u`, `s`, `small`,
+`mark` join the tags, and `style` and `class` join the attributes. Abstracts are
+untouched — `ABSTRACT_ALLOWLIST` is a separate constant, and participant input
+still renders no HTML at all.
+
+Allowing a bare `style` attribute would have been the one-line version, and it
+is broader than the request. DOMPurify decides whether an attribute may exist;
+it does not read this one's contents. So `safeStyle()` filters the declarations,
+wired in through an `afterSanitizeAttributes` hook:
+
+- **Presentation properties pass**: colour, font, text, spacing, borders,
+  background, sizing, opacity, display.
+- **`position`, `z-index`, and the offsets do not.** Those are what turn a
+  styled word into an invisible layer over the rest of the page. No conference
+  copy needs them, and dropping them costs nothing.
+- **Any value containing `url(`, `expression(`, `javascript:`, or `@import` is
+  discarded whole.** `url()` is the one CSS function that reaches the network,
+  which would turn a page view into a signal to whoever wrote the copy.
+
+Rejecting the token rather than parsing what is inside it is deliberate: the
+failure mode of a too-clever CSS parser is a bypass, and the failure mode of
+this is an organizer having to write a colour a different way.
+
+This does not make a stolen admin session harmless — an admin already holds full
+database write access, which is the larger problem either way. It keeps the
+blast radius at "ugly page" rather than "script execution".
+
+**The trap worth knowing about**: marked treats a block-level tag as a raw HTML
+block, so `<div>**bold**</div>` prints the asterisks. A blank line above and
+below the contents hands them back to the markdown parser. The editor hint says
+so, `README.md` says so, and a unit test pins the behaviour so the advice cannot
+silently go stale.
+
 ## 8. Open items
 
 - **Restrict the web API key** and enable App Check (§3.4). Free, console-only.

@@ -298,8 +298,47 @@ the same thing.
 The list of editable pages is `PAGES` in `js/config.mjs`; adding a page means
 adding an entry there and a `data-page` attribute on the host element.
 
-Markdown supports headings, lists, links, tables, bold, and italic. It is
-sanitized before rendering, so raw HTML and scripts are stripped.
+Markdown supports headings, lists, links, tables, bold, and italic.
+
+### HTML in page copy
+
+Markdown has no syntax for coloured text, so page copy may also contain plain
+HTML. Write it inline and the editor's preview shows the result immediately:
+
+```html
+Registration closes <span style="color: red">this Friday</span>.
+
+<div style="text-align: center">Poster session, 14:00</div>
+```
+
+The usable tags are `span`, `div`, `u`, `s`, `small`, and `mark`, on top of
+everything markdown already produces, and they may carry `style` and `class`.
+
+**One trap.** A block-level tag such as `<div>` switches the markdown parser
+off for everything inside it, so `<div>**bold**</div>` prints the asterisks.
+Leave a blank line above and below the contents and markdown works again:
+
+```html
+<div style="text-align: center">
+
+**Poster session**, 14:00
+
+</div>
+```
+
+`<span>` used inside a sentence has no such problem.
+
+Everything is still sanitized before it reaches the page. Scripts, event
+handlers such as `onclick`, and `javascript:` links are removed. A `style`
+attribute is filtered down to presentation properties: colour, fonts, spacing,
+borders, alignment and sizing survive, while `position`, `z-index`, and offsets
+are dropped — those are what turn a styled word into an invisible layer over the
+rest of the page — and so is any value containing `url(` or `expression(`, which
+would otherwise let page copy call out to another server. The rules live in
+`safeStyle()` in `js/markdown-render-utils.mjs` and are unit-tested.
+
+Abstract bodies are a separate, much narrower allowlist and gain none of this:
+participant input never renders HTML.
 
 ## Editing and deleting as an organizer
 

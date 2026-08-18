@@ -20,8 +20,15 @@ export async function mountPagesTab(host, { adminUid }) {
     <p id="pg-source" class="muted"></p>
 
     <label for="pg-text">Markdown
-      <span class="hint">Headings, lists, links, tables, and images. Saving publishes
-        immediately — there is no commit and no review. <span id="pg-count"></span></span>
+      <span class="hint">Headings, lists, links, tables, and images. For anything
+        markdown cannot express, write plain HTML inline — for example
+        <code>&lt;span style="color: red"&gt;registration closes soon&lt;/span&gt;</code>
+        for red text, or <code>&lt;div style="text-align: center"&gt;…&lt;/div&gt;</code>
+        to centre a block. Inside a <code>&lt;div&gt;</code>, leave a blank line above
+        and below your text or markdown stops working there. The preview below
+        shows exactly what the page will do.
+        Saving publishes immediately — there is no commit and no review.
+        <span id="pg-count"></span></span>
     </label>
     <textarea id="pg-text" rows="20" style="min-height:24rem"></textarea>
 
