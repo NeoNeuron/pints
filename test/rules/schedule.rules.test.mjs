@@ -50,6 +50,25 @@ test("an admin can add an item with only the required fields", async () => {
   }));
 });
 
+test("an admin can tag an item with a session, or leave it out", async () => {
+  await seedAdmin(env, "boss");
+  const fs = asUser(env, "boss");
+  for (const session of ["cognitive", "systems", "computational", "keynote"]) {
+    await assertSucceeds(setDoc(doc(fs, "schedule", "s1"), item({ session })));
+  }
+  await assertSucceeds(setDoc(doc(fs, "schedule", "s1"), item()));
+});
+
+test("an admin cannot invent a session outside the vocabulary", async () => {
+  await seedAdmin(env, "boss");
+  const fs = asUser(env, "boss");
+  // Including "": the editor drops the field rather than storing a blank, and a
+  // blank would otherwise print an unnamed banner on the public page.
+  for (const session of ["", "astrology", "Cognitive", 3, null]) {
+    await assertFails(setDoc(doc(fs, "schedule", "s1"), item({ session })));
+  }
+});
+
 test("an admin cannot write a malformed schedule item", async () => {
   await seedAdmin(env, "boss");
   const fs = asUser(env, "boss");

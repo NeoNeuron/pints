@@ -35,7 +35,12 @@ paid Firebase plan; the CSV export stands in for it.
   Firestore and `content/*.md` remains the seed and the read fallback. See
   "Editing page content".
 - **Schedule** — admin editor for a single-day program, ordered by start time;
-  public program page headed by the meeting date from Settings.
+  public program page headed by the meeting date from Settings. An item may be
+  tagged with a *session* (the three abstract topics, plus Keynote Lectures);
+  consecutive items sharing one are printed as a tinted block under a banner —
+  "Session II — Computational Neuroscience" — numbered by where it falls in the
+  day, so inserting a session never means renumbering the rest. Coffee, lunch and
+  the poster slot are left untagged and print between the blocks.
 - **Settings** — set the meeting date, open/close the submission window, set the
   deadline, grant admin rights. No Firebase-console workarounds remain for
   day-to-day organizing.

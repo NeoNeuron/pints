@@ -634,6 +634,39 @@ inherit`, which is what makes the two columns line up.
 Worth remembering as a pair: **a shorthand declares every longhand it covers**,
 and **font-relative units are relative to the element, not the page**.
 
+### 7.13 Program sessions are derived, not numbered by hand
+
+The organizers keep the program in a spreadsheet where a session is a run of
+tinted rows under a banner — "Session II | Computational Neuroscience". The site
+had only a flat time-ordered table, so the shape that makes the day legible was
+being lost on the way in.
+
+The field added is deliberately small: `session`, optional, one of the three
+`ABSTRACT_TOPICS` plus `keynote`. A session is what a topic becomes once it is
+scheduled, so reusing those ids means the program and the abstract list group the
+day by the same vocabulary rather than two that can drift.
+
+Three things are **not** stored, and that is the point:
+
+- **The numeral.** `groupScheduleBySession()` assigns I, II, III by where a block
+  lands in the day. Inserting a session at 11:00 renumbers everything after it for
+  free; a stored numeral would have to be edited on every item by hand, and the
+  first missed edit prints two Session IIIs.
+- **The banner text.** It comes from `SESSION_LABELS`, so a typo cannot produce
+  two spellings of one session, and a session with no items simply does not print.
+- **The order.** Grouping is by *contiguous run*, not by session id. That is the
+  one decision worth defending: grouping by id would let a stray 17:00 item tagged
+  `cognitive` drag itself back up into the 10:00 block and silently print the day
+  out of order. A program that lies about time is worse than one that shows a
+  session split in two — so a split renders as two blocks carrying the same
+  numeral, which makes the data-entry slip visible instead of hiding it.
+
+The rule allows the field but not a blank one: `''` is rejected and the editor
+drops the key rather than storing an empty string, because a blank would print an
+unnamed banner. An id outside the vocabulary is also treated as no session at
+render time, so shrinking `SCHEDULE_SESSIONS` between editions degrades to a loose
+row rather than an empty banner.
+
 ## 8. Open items
 
 - **Restrict the web API key** and enable App Check (§3.4). Free, console-only.

@@ -3,7 +3,9 @@ import assert from "node:assert/strict";
 import {
   formatDayHeading,
   formatTimeRange,
+  groupScheduleBySession,
   parseTime,
+  romanNumeral,
   sortScheduleItems,
 } from "../js/schedule-utils.mjs";
 
@@ -77,4 +79,66 @@ test("formatDayHeading renders a readable date and falls back on bad input", () 
 test("formatDayHeading is timezone-stable", () => {
   // Fixed to UTC so a late-evening local time cannot roll the date back a day.
   assert.match(formatDayHeading("2026-01-01"), /1 January 2026/);
+});
+
+test("romanNumeral covers the range a one-day program can reach", () => {
+  const got = [1, 2, 3, 4, 5, 9, 10, 14, 39].map(romanNumeral);
+  assert.deepEqual(got, ["I", "II", "III", "IV", "V", "IX", "X", "XIV", "XXXIX"]);
+});
+
+test("romanNumeral falls back to a plain number outside that range", () => {
+  assert.equal(romanNumeral(0), "0");
+  assert.equal(romanNumeral(-1), "-1");
+  assert.equal(romanNumeral(40), "40");
+  assert.equal(romanNumeral(1.5), "1.5");
+});
+
+test("groupScheduleBySession numbers sessions in time order", () => {
+  const blocks = groupScheduleBySession([
+    { title: "Coffee", start: "09:00" },
+    { title: "Dehaene", start: "10:00", session: "cognitive" },
+    { title: "Contributed 1", start: "10:30", session: "cognitive" },
+    { title: "Break", start: "11:00" },
+    { title: "Monasson", start: "11:30", session: "computational" },
+  ]);
+  assert.deepEqual(blocks.map((b) => b.type), ["item", "session", "item", "session"]);
+  assert.equal(blocks[1].numeral, "I");
+  assert.equal(blocks[1].label, "Cognitive Neuroscience");
+  assert.deepEqual(blocks[1].items.map((i) => i.title), ["Dehaene", "Contributed 1"]);
+  assert.equal(blocks[3].numeral, "II");
+  assert.equal(blocks[3].label, "Computational Neuroscience");
+});
+
+test("groupScheduleBySession keeps one numeral when a session is split", () => {
+  const blocks = groupScheduleBySession([
+    { title: "First half", start: "10:00", session: "systems" },
+    { title: "Interlude", start: "10:30" },
+    { title: "Second half", start: "11:00", session: "systems" },
+  ]);
+  assert.deepEqual(blocks.map((b) => b.type), ["session", "item", "session"]);
+  assert.equal(blocks[0].numeral, "I");
+  assert.equal(blocks[2].numeral, "I");
+});
+
+test("groupScheduleBySession never reorders the day", () => {
+  const blocks = groupScheduleBySession([
+    { title: "Late stray", start: "17:00", session: "cognitive" },
+    { title: "Lunch", start: "12:30" },
+    { title: "Early", start: "10:00", session: "cognitive" },
+  ]);
+  const titles = blocks.flatMap((b) => (b.type === "item" ? [b.item.title] : b.items.map((i) => i.title)));
+  assert.deepEqual(titles, ["Early", "Lunch", "Late stray"]);
+});
+
+test("groupScheduleBySession treats an unknown or missing session as none", () => {
+  const blocks = groupScheduleBySession([
+    { title: "Stale", start: "09:00", session: "astrology" },
+    { title: "Blank", start: "09:30", session: "" },
+    { title: "Absent", start: "10:00" },
+  ]);
+  assert.deepEqual(blocks.map((b) => b.type), ["item", "item", "item"]);
+});
+
+test("groupScheduleBySession handles an empty program", () => {
+  assert.deepEqual(groupScheduleBySession([]), []);
 });

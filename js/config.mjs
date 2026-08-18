@@ -41,6 +41,19 @@ export const TOPIC_LABELS = {
 
 export const SCHEDULE_KINDS = ["keynote", "talk", "poster", "break", "lunch", "social", "other"];
 
+// Program sessions: the three abstract topics plus the invited block. A session
+// is what a topic becomes once it is scheduled, so the ids are deliberately the
+// same strings — an item tagged "systems" sits under the same banner as the
+// abstracts filed under "systems". An item with no session (coffee, lunch, the
+// poster slot) simply carries no `session` field and renders between the blocks.
+export const SCHEDULE_SESSIONS = [...ABSTRACT_TOPICS, "keynote"];
+export const SESSION_LABELS = {
+  cognitive: "Cognitive Neuroscience",
+  systems: "Systems Neuroscience",
+  computational: "Computational Neuroscience",
+  keynote: "Keynote Lectures",
+};
+
 // Figure uploads. maxEdge is applied by the client before upload; maxBytes is
 // the hard limit that storage.rules also enforces.
 export const FIGURE = {

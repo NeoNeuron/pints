@@ -1,5 +1,5 @@
-import { SCHEDULE_KINDS } from "./config.mjs";
-import { formatTimeRange, sortScheduleItems } from "./schedule-utils.mjs";
+import { SCHEDULE_KINDS, SCHEDULE_SESSIONS, SESSION_LABELS } from "./config.mjs";
+import { formatTimeRange, groupScheduleBySession } from "./schedule-utils.mjs";
 import { deleteScheduleItem, listSchedule, saveScheduleItem } from "./db.js";
 
 // PINTS is one day in one venue, so there is no date, no room, and no manual
@@ -59,6 +59,32 @@ export async function mountScheduleTab(host) {
   }
   form.append(kindLabel, kindSelect);
 
+  // Optional on purpose: coffee, lunch and the poster slot belong to no session
+  // and print between the blocks, exactly as they do on the printed grid. The
+  // numeral is not stored — it comes from where the block lands in the day, so
+  // inserting a session never means renumbering the ones after it by hand.
+  const sessionLabel = document.createElement("label");
+  sessionLabel.setAttribute("for", "s-session");
+  sessionLabel.textContent = "Session";
+  const sessionHint = document.createElement("span");
+  sessionHint.className = "hint";
+  sessionHint.textContent =
+    "Items sharing a session are grouped under one banner, numbered by time.";
+  sessionLabel.append(sessionHint);
+  const sessionSelect = document.createElement("select");
+  sessionSelect.id = "s-session";
+  const none = document.createElement("option");
+  none.value = "";
+  none.textContent = "— no session —";
+  sessionSelect.append(none);
+  for (const id of SCHEDULE_SESSIONS) {
+    const option = document.createElement("option");
+    option.value = id;
+    option.textContent = SESSION_LABELS[id];
+    sessionSelect.append(option);
+  }
+  form.append(sessionLabel, sessionSelect);
+
   const actions = document.createElement("div");
   actions.className = "actions";
   const save = document.createElement("button");
@@ -78,6 +104,7 @@ export async function mountScheduleTab(host) {
     editingId = null;
     for (const spec of FIELDS) field(spec.key).value = "";
     kindSelect.value = "talk";
+    sessionSelect.value = "";
     heading.textContent = "Add an item";
     save.textContent = "Add item";
     cancel.hidden = true;
@@ -87,6 +114,7 @@ export async function mountScheduleTab(host) {
     editingId = item.id;
     for (const spec of FIELDS) field(spec.key).value = item[spec.key] ?? "";
     kindSelect.value = item.kind ?? "talk";
+    sessionSelect.value = SCHEDULE_SESSIONS.includes(item.session) ? item.session : "";
     heading.textContent = `Editing: ${item.title}`;
     save.textContent = "Save changes";
     cancel.hidden = false;
@@ -102,6 +130,7 @@ export async function mountScheduleTab(host) {
     time.textContent = formatTimeRange(item.start, item.end);
 
     const what = document.createElement("td");
+    what.className = "what";
     what.textContent = item.title ?? "";
 
     const who = document.createElement("td");
@@ -138,8 +167,21 @@ export async function mountScheduleTab(host) {
     return tr;
   }
 
+  function sessionHead(block) {
+    const tr = document.createElement("tr");
+    tr.className = "session-head";
+    const numeral = document.createElement("th");
+    numeral.scope = "rowgroup";
+    numeral.textContent = `Session ${block.numeral}`;
+    const label = document.createElement("td");
+    label.colSpan = 4;
+    label.textContent = block.label;
+    tr.append(numeral, label);
+    return tr;
+  }
+
   async function render() {
-    const items = sortScheduleItems(await listSchedule());
+    const items = await listSchedule();
     listEl.replaceChildren();
     if (!items.length) {
       say("The program is empty. Add the first item above.", "warn");
@@ -148,11 +190,27 @@ export async function mountScheduleTab(host) {
     const wrap = document.createElement("div");
     wrap.className = "table-scroll";
     const table = document.createElement("table");
+    table.className = "program";
     table.innerHTML =
       "<thead><tr><th>Time</th><th>What</th><th>Who</th><th>Kind</th><th></th></tr></thead>";
-    const tbody = document.createElement("tbody");
-    for (const item of items) tbody.append(row(item, render));
-    table.append(tbody);
+
+    // Grouped the same way the public page groups it, so this list is a preview
+    // of the program rather than a second view of it that has to be reconciled.
+    let loose = null;
+    for (const block of groupScheduleBySession(items)) {
+      if (block.type === "session") {
+        loose = null;
+        const body = document.createElement("tbody");
+        body.className = `session session-${block.session}`;
+        body.append(sessionHead(block));
+        for (const item of block.items) body.append(row(item, render));
+        table.append(body);
+      } else {
+        if (!loose) table.append(loose = document.createElement("tbody"));
+        loose.append(row(block.item, render));
+      }
+    }
+
     wrap.append(table);
     listEl.append(wrap);
   }
@@ -162,6 +220,9 @@ export async function mountScheduleTab(host) {
     const data = Object.fromEntries(FIELDS.map((s) => [s.key, field(s.key).value.trim()]));
     if (!data.title) return say("A title is required.", "err");
     data.kind = kindSelect.value;
+    // Absent rather than empty: `session` is optional in firestore.rules, and a
+    // stored "" would have to be special-cased by every reader.
+    if (sessionSelect.value) data.session = sessionSelect.value;
 
     save.disabled = true;
     try {

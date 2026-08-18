@@ -1,3 +1,5 @@
+import { SESSION_LABELS } from "./config.mjs";
+
 const LATEST = Number.MAX_SAFE_INTEGER;
 const collator = new Intl.Collator("en", { sensitivity: "base" });
 
@@ -39,4 +41,66 @@ export function formatDayHeading(isoDay, locale = "en-GB") {
   return date.toLocaleDateString(locale, {
     weekday: "long", day: "numeric", month: "long", year: "numeric", timeZone: "UTC",
   });
+}
+
+const ROMAN = [
+  [10, "X"], [9, "IX"], [5, "V"], [4, "IV"], [1, "I"],
+];
+
+/** 1 -> "I", 4 -> "IV", 14 -> "XIV". Anything else comes back as a plain number. */
+export function romanNumeral(n) {
+  if (!Number.isInteger(n) || n < 1 || n > 39) return String(n);
+  let rest = n;
+  let out = "";
+  for (const [value, glyph] of ROMAN) {
+    while (rest >= value) {
+      out += glyph;
+      rest -= value;
+    }
+  }
+  return out;
+}
+
+/**
+ * Lay the program out as the printed grid does: a run of items sharing a
+ * `session` becomes one titled block, everything else stays a loose row.
+ *
+ * Returns `[{ type: "item", item }, { type: "session", session, label,
+ * numeral, items }]` in display order.
+ *
+ * Grouping is by *contiguous run*, not by session id, so the result can never
+ * reorder the day — time order is the one thing a program must not break. If
+ * the same session appears twice with something else in between (a data-entry
+ * slip, or a session deliberately split around a break) it renders as two
+ * blocks carrying the same numeral, which shows the split rather than hiding
+ * it by dragging the stray item back up the page.
+ */
+export function groupScheduleBySession(items) {
+  const blocks = [];
+  const numerals = new Map();
+  let open = null;
+
+  for (const item of sortScheduleItems(items)) {
+    // An unknown session id is treated as none: the vocabulary can shrink
+    // between editions and a stale value must not print a blank banner.
+    const session = Object.hasOwn(SESSION_LABELS, item?.session) ? item.session : null;
+    if (!session) {
+      open = null;
+      blocks.push({ type: "item", item });
+      continue;
+    }
+    if (open?.session !== session) {
+      if (!numerals.has(session)) numerals.set(session, romanNumeral(numerals.size + 1));
+      open = {
+        type: "session",
+        session,
+        label: SESSION_LABELS[session],
+        numeral: numerals.get(session),
+        items: [],
+      };
+      blocks.push(open);
+    }
+    open.items.push(item);
+  }
+  return blocks;
 }

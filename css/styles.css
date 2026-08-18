@@ -124,6 +124,35 @@ th { font-size: .82rem; text-transform: uppercase; letter-spacing: .04em; color:
 tr.kind-break td, tr.kind-lunch td { color: var(--muted); font-style: italic; }
 td.time { white-space: nowrap; font-variant-numeric: tabular-nums; }
 
+/* The title is what the reader is scanning for, so it carries the weight. The
+   muted rows keep theirs: coffee and lunch are the punctuation between sessions,
+   and bolding them would flatten the distinction the italics are making. */
+.program td.what { font-weight: 600; }
+.program tr.kind-break td.what, .program tr.kind-lunch td.what { font-weight: 400; }
+
+/* Program sessions. Each <tbody class="session session-*"> is one block: a
+   banner row naming it, then its items, all sharing a tint so the eye can find
+   where a session starts and ends without reading the times.
+
+   The tints are deliberately pale — they sit behind body text, so they are
+   chosen for a comfortable contrast ratio against --ink rather than for
+   punch, and the left border is what actually marks the block for anyone who
+   cannot separate the hues. */
+.program tbody.session { --session-tint: var(--bg-soft); }
+.program tbody.session-cognitive { --session-tint: #e6eef7; }
+.program tbody.session-computational { --session-tint: #f7e7e4; }
+.program tbody.session-systems { --session-tint: #e7f0e6; }
+.program tbody.session-keynote { --session-tint: #eceaef; }
+.program tbody.session td, .program tbody.session th { background: var(--session-tint); }
+.program tbody.session > tr > :first-child { border-left: 3px solid rgba(0, 0, 0, .18); }
+/* The banner reads as a heading inside the table, so it takes the weight the
+   rows do not: no uppercase, because it carries a proper name. */
+.program tr.session-head > * {
+  font-weight: 700; color: var(--ink); font-size: 1rem;
+  text-transform: none; letter-spacing: normal; padding-block: .6rem;
+}
+.program tr.session-head th { white-space: nowrap; }
+
 form { max-width: var(--measure); }
 fieldset { border: 1px solid var(--line); border-radius: var(--radius); padding: 0 1rem 1rem; margin: 0 0 1.5rem; }
 legend { padding: 0 .4rem; font-weight: 600; }

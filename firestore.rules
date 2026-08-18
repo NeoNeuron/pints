@@ -68,11 +68,16 @@ service cloud.firestore {
     // no manual rank: `start` is the whole ordering.
     function validScheduleItem(data) {
       return data.keys().hasOnly(['edition', 'start', 'end', 'title', 'speaker',
-                                  'affiliation', 'kind', 'abstractId'])
+                                  'affiliation', 'kind', 'session', 'abstractId'])
         && data.keys().hasAll(['edition', 'title', 'kind'])
         && data.edition is string
         && str(data.title, 200)
-        && data.kind in ['keynote', 'talk', 'poster', 'break', 'lunch', 'social', 'other'];
+        && data.kind in ['keynote', 'talk', 'poster', 'break', 'lunch', 'social', 'other']
+        // Optional: coffee, lunch and the poster slot belong to no session. The
+        // vocabulary matches ABSTRACT_TOPICS plus the invited block, because a
+        // session is what a topic becomes once it is scheduled.
+        && (!('session' in data)
+            || data.session in ['cognitive', 'systems', 'computational', 'keynote']);
     }
 
     function validProfile(data) {
