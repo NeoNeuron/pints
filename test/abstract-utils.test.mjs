@@ -9,6 +9,7 @@ import {
   nextPosterNumber,
   sortPublicAbstracts,
   submissionStatusLabel,
+  summaryAuthorLine,
 } from "../js/abstract-utils.mjs";
 
 test("authorLineParts renders 1-based affiliation marks", () => {
@@ -278,5 +279,41 @@ test("submissionStatusLabel says only 'Accepted' with no published copy to read"
 test("submissionStatusLabel under-claims on anything it does not recognise", () => {
   for (const odd of ["", null, undefined, "banquet"]) {
     assert.equal(submissionStatusLabel(odd), "In review");
+  }
+});
+
+test("summaryAuthorLine names the presenting author", () => {
+  const authors = [
+    { name: "Liang Wei" },
+    { name: "Ana Ferreira", presenting: true },
+    { name: "Priya Nair" },
+  ];
+  assert.equal(summaryAuthorLine(authors), "Ana Ferreira et al.");
+});
+
+test("summaryAuthorLine falls back to the first author when none is marked", () => {
+  assert.equal(summaryAuthorLine([{ name: "Liang Wei" }, { name: "Priya Nair" }]),
+    "Liang Wei et al.");
+});
+
+test("summaryAuthorLine drops 'et al.' for a sole author", () => {
+  assert.equal(summaryAuthorLine([{ name: "Ana Ferreira", presenting: true }]), "Ana Ferreira");
+  assert.equal(summaryAuthorLine([{ name: "Ana Ferreira" }]), "Ana Ferreira");
+});
+
+test("summaryAuthorLine takes the first of several marked presenting", () => {
+  // Two presenters is a data error; showing one of them beats hiding the row.
+  const authors = [{ name: "Ana Ferreira", presenting: true }, { name: "Liang Wei", presenting: true }];
+  assert.equal(summaryAuthorLine(authors), "Ana Ferreira et al.");
+});
+
+test("summaryAuthorLine ignores blank names, including when counting", () => {
+  assert.equal(summaryAuthorLine([{ name: "Ana Ferreira" }, { name: "   " }]), "Ana Ferreira");
+  assert.equal(summaryAuthorLine([{ name: "  Ana Ferreira  " }]), "Ana Ferreira");
+});
+
+test("summaryAuthorLine says nothing about an abstract with no authors", () => {
+  for (const empty of [[], null, undefined, [{}], [{ name: "" }]]) {
+    assert.equal(summaryAuthorLine(empty), "", `expected "" for ${JSON.stringify(empty)}`);
   }
 });

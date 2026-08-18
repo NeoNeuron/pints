@@ -712,6 +712,60 @@ link appears only once the abstract is public. The unknown-id and the
 not-accepted cases give the same answer for a related reason: distinguishing them
 would announce a decision through a 404.
 
+### 7.16 The list had to collapse, and `loading="lazy"` was a trap
+
+`abstracts.html` rendered every accepted abstract in full. At the twenty of a
+first edition that is merely long; at the hundreds the organizers expect it is
+unusable, and it fetches every figure whether or not anyone scrolls that far.
+
+Rows now collapse: poster number or talk pill, title, presenting author with "et
+al." (`summaryAuthorLine`), grouped under topic headings via the `groupByTopic`
+the review console already used. The interesting part is not the disclosure, it
+is **where the deferral lives**.
+
+The obvious implementation — render every card inside a closed `<details>` — buys
+nothing. Collapsed markup is not a deferred download; the browser parses and
+fetches it all the same. So `abstractDisclosure` builds only the `<summary>` and
+attaches the body on the first `toggle`. Verified rather than assumed: 120 seeded
+abstracts, zero figure requests on load, one after opening one row.
+
+Then the trap. The figure carried `loading="lazy"`, which sounds like belt and
+braces and was in fact **broken**. An image with no `width`/`height` and nothing
+loaded yet lays out at 0×0, and a zero-area target never registers as
+intersecting, so a figure revealed by opening a disclosure sat blank
+indefinitely — measured: in the viewport at y=473, still `naturalWidth === 0`
+after 1.5 s, loading instantly the moment it was forced eager. It would also have
+printed blank, defeating the `beforeprint` handler.
+
+The attribute is gone. Every remaining caller draws one abstract's figure at a
+time, or has already deferred the work by not building the body, so there is
+nothing left for it to do. **Two lazy mechanisms did not compose; the one that
+could be verified stayed.**
+
+Printing gets a handler rather than a stylesheet, for the same reason: a rule
+cannot reveal a body that was never built, so `beforeprint` opens every row —
+which builds them — and `@media print` only strips the chrome.
+
+### 7.17 Two pages disagreed about what "your submission" looks like
+
+`submit.html` showed a participant their stored abstract as a card with its
+status and an Edit button. `account.html`, reached from the header on every page,
+dropped the same person straight into the editor for the same abstract. Both
+screens were reachable, neither was wrong on its own, and together they were a
+site contradicting itself — the sort of defect that gets reported as "the change
+didn't work" because the reporter was on the other page.
+
+`js/submission-view.js` is now the single answer, and both pages call it. The
+extraction is the fix; the card was already right.
+
+It took one piece of state with it. `page-account.js` had a `mountedId` guard
+whose only job was to stop a re-render wiping the "Abstract saved" line, because
+re-rendering meant re-mounting the form the person was reading. Returning to the
+card *is* the post-save render now, so the guard went and two honest flags
+replaced it: `justSaved`, consumed by the next render, and `hasAbstract`, which is
+the whole difference between "submitted" and "updated". A delete clears both, so
+a second attempt is congratulated the same way the first was.
+
 ## 8. Open items
 
 - **Restrict the web API key** and enable App Check (§3.4). Free, console-only.

@@ -2,8 +2,8 @@ import { mountLayout, setAuthLink } from "./layout.js";
 import { warnIfUnconfigured } from "./firebase.js";
 import { onUser } from "./auth.js";
 import { getPublicAbstract, listPublicAbstracts } from "./db.js";
-import { filterAbstracts, sortPublicAbstracts } from "./abstract-utils.mjs";
-import { abstractCard, abstractPermalink } from "./abstract-card.js";
+import { filterAbstracts, groupByTopic, sortPublicAbstracts } from "./abstract-utils.mjs";
+import { abstractCard, abstractDisclosure, abstractPermalink } from "./abstract-card.js";
 import { ABSTRACT_TOPICS, SITE_NAME, TOPIC_LABELS } from "./config.mjs";
 import { hydrateMarkdownHosts } from "./content-hydrate.js";
 
@@ -90,6 +90,27 @@ async function mountList() {
     topicEl.append(option);
   }
 
+  // Reading the whole list end to end is a real use — the committee does it, and
+  // so does anyone printing an abstract book — and hundreds of collapsed rows
+  // would otherwise mean hundreds of clicks.
+  const expandAll = (open) => {
+    for (const row of listEl.querySelectorAll("details.abstract")) row.open = open;
+    toggleAll.textContent = open ? "Collapse all" : "Expand all";
+    toggleAll.dataset.open = String(open);
+  };
+  const toggleAll = document.createElement("button");
+  toggleAll.type = "button";
+  toggleAll.className = "secondary";
+  toggleAll.id = "expand-all";
+  toggleAll.textContent = "Expand all";
+  toggleAll.addEventListener("click", () => expandAll(toggleAll.dataset.open !== "true"));
+  countEl.after(toggleAll);
+
+  // A collapsed row prints as a title and nothing else, and the bodies are built
+  // lazily so there is nothing for a print stylesheet to reveal. Opening them
+  // here builds them, which is what makes the printed page an abstract book.
+  window.addEventListener("beforeprint", () => expandAll(true));
+
   if (warnIfUnconfigured(msg)) return;
 
   let all = [];
@@ -97,8 +118,27 @@ async function mountList() {
     const byTopic = topicEl.value ? all.filter((a) => a.topic === topicEl.value) : all;
     const shown = filterAbstracts(byTopic, queryEl.value);
     countEl.textContent = `${shown.length} of ${all.length} shown.`;
-    listEl.replaceChildren(...shown.map((a) =>
-      abstractCard(a, { permalink: abstractPermalink(a.id) })));
+
+    // groupByTopic keeps input order inside each bucket, so talks-first-then-
+    // board-number survives within a topic, and it sweeps an unknown topic into
+    // a trailing group rather than dropping the abstract.
+    const nodes = [];
+    for (const group of groupByTopic(shown, ABSTRACT_TOPICS)) {
+      const h2 = document.createElement("h2");
+      h2.className = "topic-heading";
+      h2.textContent = group.topic ? (TOPIC_LABELS[group.topic] ?? group.topic) : "Other";
+      const count = document.createElement("span");
+      count.className = "muted";
+      count.textContent = ` ${group.items.length}`;
+      h2.append(count);
+      nodes.push(h2, ...group.items.map((a) =>
+        abstractDisclosure(a, { permalink: abstractPermalink(a.id) })));
+    }
+    listEl.replaceChildren(...nodes);
+    // A redraw destroys every open row, so the control must not still say
+    // "Collapse all".
+    expandAll(false);
+    toggleAll.hidden = !shown.length;
   };
 
   try {

@@ -9,6 +9,23 @@ export function authorLineParts(authors) {
   }));
 }
 
+/**
+ * The one name a collapsed list row shows: "Ana Ferreira et al."
+ *
+ * The presenting author, because they are who stands at the poster and who a
+ * reader is looking for; the first author when nobody is marked, so a malformed
+ * record still names somebody. "et al." counts *authors*, not presenters — two
+ * people marked presenting is a data error, and swallowing the second one would
+ * hide it. Empty string for no authors at all, so the caller can skip the line.
+ */
+export function summaryAuthorLine(authors) {
+  const list = (authors ?? []).filter((a) => String(a?.name ?? "").trim());
+  if (!list.length) return "";
+  const lead = list.find((a) => a?.presenting) ?? list[0];
+  const name = String(lead.name).trim();
+  return list.length > 1 ? `${name} et al.` : name;
+}
+
 /** The next free poster board number. */
 export function nextPosterNumber(publicAbstracts) {
   const used = (publicAbstracts ?? [])

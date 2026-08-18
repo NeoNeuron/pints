@@ -102,6 +102,39 @@ figcaption { margin-top: .35rem; max-width: var(--measure); color: var(--muted);
 .pill.status { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); font-weight: 600; }
 .permalink { font-size: .85rem; }
 
+/* The public abstract list: one row per abstract, body behind a disclosure.
+   A poster session runs to hundreds, so the row is the unit that has to stay
+   cheap to scan — hence a tighter margin than the generic `details` rule, which
+   was written for a single disclosure on the account page. */
+.abstract { margin: 0 0 .4rem; }
+.abstract > summary {
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: .35rem .75rem;
+  padding: .55rem .85rem; font-weight: 400;
+}
+.abstract > summary:hover { background: var(--bg-soft); }
+/* The title carries the weight; the author is the secondary cue you scan for
+   when you already know whose poster you are looking for. */
+.abstract .summary-title { font-weight: 600; }
+.abstract .summary-authors { color: var(--muted); font-size: .92rem; }
+.abstract .abstract-body { padding: .75rem 1rem 1rem; }
+.abstract .abstract-body > .byline:first-child { margin-top: 0; }
+
+.topic-heading { margin: 2rem 0 .75rem; font-size: 1.15rem; }
+.topic-heading .muted { font-weight: 400; font-size: .9rem; }
+#expand-all { margin-bottom: 1rem; }
+
+/* Printing the abstract list should yield an abstract book. The rows are opened
+   from a beforeprint handler rather than by a rule here — their bodies are built
+   lazily, so there would otherwise be nothing for CSS to reveal. This only has
+   to strip the controls and the chrome around them. */
+@media print {
+  .site-header, .site-footer, #filters, #expand-all, #count, .permalink { display: none; }
+  .abstract, .card { border: 0; padding-inline: 0; break-inside: avoid; }
+  .abstract > summary { list-style: none; padding-inline: 0; }
+  .abstract > summary::-webkit-details-marker { display: none; }
+  .abstract .abstract-body { padding-inline: 0; }
+}
+
 /* The abstract-submission disclosure on account.html. Closed by default, so the
    summary has to read as a button people can find. */
 details { border: 1px solid var(--line); border-radius: var(--radius); margin: 1rem 0; }

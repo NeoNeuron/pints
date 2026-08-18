@@ -8,6 +8,7 @@ import { getMyAbstract, getProfile, publishParticipant, saveProfile } from "./db
 // 10-minute max-age. Static imports are part of the module graph and are
 // revalidated with the document.
 import { mountAbstractForm } from "./abstract-form.js";
+import { mountSubmissionCard } from "./submission-view.js";
 
 mountLayout();
 
@@ -151,7 +152,7 @@ async function mountAbstracts({ user, isAdmin, profile }) {
   /** Mount the blank form. Deferred until the disclosure is first opened. */
   const openNewForm = async () => {
     if (formHost.firstChild) return;   // a half-typed draft is still a draft
-    await mountAbstractForm(formHost, { ...defaults, onSaved: render });
+    await mountAbstractForm(formHost, { ...defaults, onSaved: afterSave });
   };
 
   details.addEventListener("toggle", () => {
@@ -169,24 +170,43 @@ async function mountAbstracts({ user, isAdmin, profile }) {
     listMsg.textContent = text;
   };
 
-  // Which abstract the editor currently holds. The form calls back on every
-  // save as well as on delete, and re-mounting after an ordinary save would
-  // throw away the "Abstract saved" line the person is reading. So a render
-  // only rebuilds when the abstract has appeared or disappeared.
-  let mountedId = null;
+  // Two flags rather than one. `justSaved` is set by whichever form called back
+  // and is consumed by the next render; `hasAbstract` remembers whether there
+  // was one before that save, which is the difference between "submitted" and
+  // "updated". A delete clears both, so a second attempt is congratulated the
+  // same way the first was.
+  let justSaved = false;
+  let hasAbstract = false;
+
+  const afterSave = () => {
+    justSaved = true;
+    return render();
+  };
+
+  /** The abstract as it stands, with Edit swapping the editor in below it. */
+  async function showCard(abstract) {
+    await mountSubmissionCard(editHost, abstract, {
+      onEdit: () => mountAbstractForm(editHost, {
+        ...defaults,
+        abstract,
+        onCancel: () => showCard(abstract).catch(fail),
+        onSaved: afterSave,
+      }).catch(fail),
+    });
+  }
 
   async function render() {
     try {
       const mine = await getMyAbstract(user.uid);
-      if (mine && mine.id === mountedId) return;
 
       if (!mine) {
-        mountedId = null;
         editHost.replaceChildren();
         // A deleted abstract leaves a stale draft behind; clear it so reopening
         // the disclosure mounts a blank form.
         formHost.replaceChildren();
         details.hidden = false;
+        justSaved = false;
+        hasAbstract = false;
         listMsg.className = "msg";
         listMsg.textContent = "";
         // Arriving from "Submit an abstract" on the home page: open the form
@@ -196,14 +216,21 @@ async function mountAbstracts({ user, isAdmin, profile }) {
         return;
       }
 
-      const first = mountedId === null && Boolean(formHost.firstChild);
-      mountedId = mine.id;
       details.hidden = true;
       details.open = false;
       formHost.replaceChildren();
-      await mountAbstractForm(editHost, { ...defaults, abstract: mine, onSaved: render });
-      if (first) say("Abstract submitted. You can edit it until the deadline.", "ok");
-      else { listMsg.className = "msg"; listMsg.textContent = ""; }
+      await showCard(mine);
+
+      if (justSaved) {
+        say(hasAbstract
+          ? "Abstract updated."
+          : "Abstract submitted. You can edit it until the deadline.", "ok");
+      } else {
+        listMsg.className = "msg";
+        listMsg.textContent = "";
+      }
+      justSaved = false;
+      hasAbstract = true;
     } catch (err) {
       fail(err);
     }

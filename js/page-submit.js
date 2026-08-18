@@ -1,10 +1,9 @@
 import { mountLayout, setAuthLink } from "./layout.js";
 import { warnIfUnconfigured } from "./firebase.js";
 import { createSubmitterAccount, friendlyAuthError, onUser, sendReset } from "./auth.js";
-import { getMyAbstract, getProfile, getPublicAbstract, saveProfile } from "./db.js";
+import { getMyAbstract, getProfile, saveProfile } from "./db.js";
 import { mountAbstractForm } from "./abstract-form.js";
-import { abstractCard, abstractPermalink } from "./abstract-card.js";
-import { submissionStatusLabel } from "./abstract-utils.mjs";
+import { mountSubmissionCard } from "./submission-view.js";
 import { withNext } from "./redirect-utils.mjs";
 
 /**
@@ -114,59 +113,18 @@ async function showForm(abstract) {
   });
 }
 
-/**
- * The abstract as submitted, rendered exactly as the public list renders it.
- *
- * Showing the filled-in form again after a save answers "did it work?" with the
- * same screen that was on display before the button was pressed — the green line
- * is the only difference, and it is easy to miss. The card is the other half of
- * the answer: it is what the organizers will read, so it is what should be shown
- * back.
- */
+/** The abstract as submitted, with the editor one button away. */
 async function showSubmitted(abstract) {
   host.replaceChildren();
   host.hidden = true;
   intro.textContent = "One abstract per person. You can edit yours until the "
     + "deadline.";
-
-  // The poster/talk decision and the board number live only on the public copy,
-  // so a decided abstract costs one extra read and an undecided one costs none.
-  const published = abstract.status === "accepted"
-    ? await getPublicAbstract(abstract.id).catch((err) => {
-      console.error("[pints] getPublicAbstract", err);
-      return null;
-    })
-    : null;
-
-  const card = abstractCard(abstract, {
-    statusLabel: submissionStatusLabel(abstract.status, published),
-    // Only once it is public. A link to an abstract still in review resolves for
-    // its author and for nobody else, which is a worse thing to hand somebody
-    // than no link at all.
-    permalink: published ? abstractPermalink(abstract.id) : null,
-    headingLevel: "h2",
+  await mountSubmissionCard(submittedEl, abstract, {
+    onEdit: () => {
+      host.hidden = false;
+      showForm(abstract);
+    },
   });
-
-  const actions = document.createElement("div");
-  actions.className = "actions";
-  const edit = document.createElement("button");
-  edit.type = "button";
-  edit.textContent = "Edit submission";
-  edit.addEventListener("click", () => {
-    host.hidden = false;
-    showForm(abstract);
-  });
-  actions.append(edit);
-
-  if (published) {
-    const note = document.createElement("span");
-    note.className = "muted";
-    note.textContent = "Accepted abstracts are frozen — ask an organizer to change one.";
-    actions.append(note);
-  }
-
-  card.append(actions);
-  submittedEl.replaceChildren(card);
 }
 
 /**

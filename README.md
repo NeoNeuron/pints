@@ -134,11 +134,11 @@ editable, and with a single slot per person that matters more than it used to: a
 rejected participant would otherwise be unable to revise, delete, or replace
 their submission, because there is nowhere else to put a second attempt.
 
-### One renderer, three places
+### One renderer, four places
 
 `js/abstract-card.js` draws an abstract, and it is the only thing that does: the
-public list, the live preview inside the submission form, and the confirmation
-shown after a submission all call it. That is what lets the form promise "exactly
+public list, the live preview inside the submission form, the shared-link page and
+the confirmation shown after a submission all call it. That is what lets the form promise "exactly
 what the abstract list will show" — with a second renderer nearby the promise
 would be a guess. The preview updates on every keystroke and includes the figure
 and its caption; it leaves out the poster number and the talk pill, which are the
@@ -147,12 +147,24 @@ committee's to assign.
 After a save, `submit.html` shows the stored abstract as that same card, with the
 status and an **Edit submission** button, rather than leaving the filled-in form
 on screen behind a green line. Arriving with an abstract already on file shows the
-same view, because it is the same state.
+same view, because it is the same state. `account.html` does exactly the same,
+through the shared `js/submission-view.js` — a participant meets their own
+abstract on two pages and they must not disagree about what it looks like.
 
 ### Sharing an abstract
 
+The public list is **collapsed and grouped**: topic headings in the order
+`ABSTRACT_TOPICS` declares them (anything unrecognised lands in a trailing
+"Other"), and one row per abstract carrying the poster board number or a talk
+pill, the title, and the presenting author with "et al." Clicking a row opens it.
+**The body is built on first open, not at render time** — a poster session runs to
+hundreds of abstracts, and a `<details>` that already contains its `<img>` still
+fetches it. **Expand all** opens everything, and a `beforeprint` handler does the
+same automatically, so printing the page yields an abstract book rather than a
+list of titles.
+
 `abstracts.html?a=<id>` renders one abstract on its own, sets the tab title to
-its title, and offers a way back to the list; every card in the list carries that
+its title, and offers a way back to the list; every row in the list carries that
 link. The status a submitter sees is **In review** until a decision is taken and
 then **Accepted as a talk** or **Accepted as poster P12**
 (`submissionStatusLabel`).
