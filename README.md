@@ -45,7 +45,7 @@ paid Firebase plan; the CSV export stands in for it.
   affiliation, edit any abstract at any status, and delete an abstract or a
   participant outright. See "Editing and deleting as an organizer".
 
-88 security-rules tests and 132 unit tests cover this.
+89 security-rules tests and 142 unit tests cover this.
 
 ### Deploying rules — order matters
 
@@ -211,6 +211,12 @@ an empty note over a real one. Accept and reject no longer write notes at all.
 
 ## Photographs of previous editions
 
+> **The sync is not deployed.** Its callable was temporarily removed from
+> `functions/index.js` so the rest of the functions could ship — see "Editing and
+> deleting as an organizer" for why and how to restore it. Everything below is
+> accurate and the browser half is untouched; only the Sync button is inert, and
+> the Archive admin tab says so.
+
 The Archive page carries a slideshow, one photograph at a time, one edition at a
 time, fed from `gallery/{year}` in Firestore. An organizer pastes a Dropbox
 folder link in the admin console's **Archive** tab and presses **Sync from
@@ -302,14 +308,24 @@ uploader. Both need the Admin SDK, so `functions/` holds these callables:
 |---|---|
 | `deleteAbstractCompletely` | removes the abstract, its published copy, its reviews, its figure |
 | `deleteParticipant` | all of the above for every abstract they own, plus their profile, their public listing, and their login |
-| `syncDropboxGallery` | lists a Dropbox folder and caches its photographs in `gallery/{year}` — see "Photographs of previous editions" |
 | `backfillParticipants` | every five minutes, publishes verified participants who never loaded `account.html` — see "Being listed without ever loading account.html" |
+| `syncDropboxGallery` | **temporarily removed** — see below |
 
-Three of these are here because they must **bypass the rules** — the deletes act
-on somebody else's documents, and the backfill writes on behalf of a person who
-is signed in nowhere. `syncDropboxGallery` is here because it must **hold a
-secret the browser cannot**. Those are the only two reasons anything belongs in
-`functions/`. The moment ordinary reads and writes start
+All three deployed ones are here because they must **bypass the rules**: the
+deletes act on somebody else's documents, and the backfill writes on behalf of a
+person who is signed in nowhere. The other reason something may live here is that
+it must **hold a secret the browser cannot** — which is `syncDropboxGallery`'s
+justification. Those are the only two reasons anything belongs in `functions/`.
+
+**`syncDropboxGallery` is not in `functions/index.js` right now.** It binds three
+Dropbox secrets, and a function whose secrets do not exist cannot be provisioned
+— which fails the whole `firebase deploy --only functions`, taking the deletes
+and the backfill down with it. Rather than hold everything else hostage to a
+Dropbox app nobody has created yet, it was removed in a commit of its own. To
+bring it back: set the three secrets as described in "Setting up the Dropbox
+app", find the commit whose subject begins "Take the Dropbox sync out of the
+deploy", and `git revert` it. Its browser half — the Archive admin tab,
+`js/functions.js`, the public slideshow — is untouched and still waiting for it. The moment ordinary reads and writes start
 going through callables, the site stops being a static site and every page pays
 cold-start latency for work the rules already secure.
 

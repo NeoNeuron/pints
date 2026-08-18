@@ -14,6 +14,11 @@ import { confirmChoice } from "./confirm-dialog.js";
 export async function mountArchiveTab(host, { adminUid }) {
   host.innerHTML = `
     <div id="ar-msg" class="msg" role="status" aria-live="polite"></div>
+    <p class="msg warn">The Dropbox sync is not switched on yet: its callable is
+      not deployed, because it needs three Dropbox secrets that do not exist in
+      the project. See “Setting up the Dropbox app” in the README. Photos
+      already synced still show on the Archive page, and their captions can still
+      be edited here — only Sync is inert.</p>
     <p class="muted">Paste the “Anyone with the link” share link of a Dropbox
       folder of photographs, then press Sync. The photos appear in a slideshow on
       the <a href="previous.html">Archive</a> page, newest edition first.</p>
