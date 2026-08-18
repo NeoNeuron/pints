@@ -181,9 +181,11 @@ export const backfillParticipants = onSchedule(
       .map((doc) => doc.id));
 
     let published = 0;
+    let scanned = 0;
     let pageToken;
     do {
       const page = await getAuth().listUsers(1000, pageToken);
+      scanned += page.users.length;
       for (const user of page.users) {
         if (!user.emailVerified || listed.has(user.uid)) continue;
 
@@ -215,6 +217,11 @@ export const backfillParticipants = onSchedule(
       pageToken = page.pageToken;
     } while (pageToken);
 
+    // Debug on every sweep, info only when it did something. A periodic job that
+    // is silent while idle is indistinguishable from one that has stopped
+    // firing, and "is the backfill alive?" has to be answerable without adding
+    // a test participant to see whether they appear.
+    logger.debug("participant sweep", { listed: listed.size, scanned, published });
     if (published) logger.info("participants backfilled", { published });
   },
 );
