@@ -7,3 +7,4 @@ ui-debug.log
 *.swp
 .claude/
 functions/node_modules/
+__pycache__/

@@ -491,6 +491,15 @@ PATH="/opt/homebrew/opt/openjdk/bin:$PATH" npm run emulators
 - `marked` and `DOMPurify` are **vendored** into `vendor/` by `npm run vendor`,
   so the browser imports them as local files. There is no CDN dependency at
   runtime and no bundler.
+- Two logo files, both **generated** by `scripts/logo/` and not hand-edited —
+  see the README in that directory. `assets/pints-2026-header.svg` is the home
+  hero (wordmark, subtitle and date); `assets/pints-mark.svg` is the wordmark
+  alone and is the header brand link on every page, injected by `js/layout.js`.
+  Their text is stored as outlines rather than `<text>` in Trebuchet MS, because
+  a visitor without that font (most Linux and Android) otherwise gets a Times
+  wordmark with the pint-glass "i" landing on the N. Changing the date or the
+  venue means editing the constants at the top of `scripts/logo/build_logo.py`
+  and re-running it; the alt text in `index.html` has to be updated to match.
 - **All paths are relative.** Never write a leading-slash path: the site may be
   served from `<owner>.github.io/pints/`, where absolute paths would 404.
   **The single exception is `404.html`**, which Pages renders at the *requested*

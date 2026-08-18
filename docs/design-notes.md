@@ -575,6 +575,65 @@ below the contents hands them back to the markdown parser. The editor hint says
 so, `README.md` says so, and a unit test pins the behaviour so the advice cannot
 silently go stale.
 
+### 7.11 The header logo carries its text as outlines
+
+`scripts/logo/` generates two files from the 2025 Inkscape source it keeps
+alongside them: `assets/pints-2026-header.svg`, the home hero, replacing the text
+heading and the date line under it; and `assets/pints-mark.svg`, the wordmark
+alone, which `js/layout.js` puts in the header brand link on every page. Neither
+is hand-edited. Same artwork, two crops — the mark is not a separate drawing, so
+they cannot drift apart.
+
+The source draws the wordmark, subtitle and date as `<text>` in Trebuchet MS.
+That is fine in Inkscape and fine on macOS and Windows, and it falls apart
+everywhere else: without the font a browser substitutes its default serif, the
+wordmark renders as Times, and the pint-glass "i" — a `<path>`, so it does not
+move — ends up sitting on the N. Most Linux and Android visitors would see that.
+So the generator shapes each run with HarfBuzz and emits outlines. Only the two
+icon paths are copied across verbatim, transforms and clip-paths intact, so the
+artwork itself is the designer's.
+
+Two things had to be recovered by measuring the designer's own export
+(`pints_header_2025.png`) rather than trusting the file, because Inkscape and
+browsers disagree about both:
+
+- The subtitle's grey runs carry no `font-family` and no `font-size`, so a
+  browser renders them in 16px serif next to 12px bold sans capitals. The export
+  shows them as 12.5px Trebuchet, matching the capitals.
+- The wordmark run carries `dx="0 -1.295"`, which the export ignores. Honouring
+  it puts `NTS` 3px left of where the logo has always been.
+
+With those fixed the output matches the 2025 export to within 2px across its
+980px width. The `viewBox` is also cropped to the ink: the source frames the
+artwork on a page-sized canvas, and that dead margin read as the logo being
+indented against the buttons beneath it.
+
+**Why this is not a build step.** The generated SVGs are committed and the site
+loads them directly; `scripts/logo/` is an asset tool that runs when the date or
+the wording changes, needs macOS system fonts and a throwaway virtualenv, and is
+deliberately absent from `package.json`.
+
+### 7.12 `.wrap` was silently eating every page's vertical padding
+
+Sizing the hero logo to the width of the prose below it turned up two layout
+bugs that had nothing to do with the logo.
+
+`main { padding-block: 2rem 1rem }` had never once applied. `.wrap` set
+`padding: 0 1.25rem`, and as a *shorthand* that also declares `padding-block: 0`
+— from a class selector, which outranks an element selector regardless of source
+order. Every page's copy therefore sat flush against the header. It is now
+`padding-inline`. The header, hero and footer wraps all set `padding-block`
+explicitly, so they never depended on the zero.
+
+The second was `--measure`. It is `68ch`, and `ch` is the width of the *element's
+own* `0` glyph — so the identical `max-width: var(--measure)` resolved 9% wider
+on the hero logo than on `.prose`, because the logo inherited the `h1`'s bold
+display font. The `h1` now holds nothing but the image and carries `font:
+inherit`, which is what makes the two columns line up.
+
+Worth remembering as a pair: **a shorthand declares every longhand it covers**,
+and **font-relative units are relative to the element, not the page**.
+
 ## 8. Open items
 
 - **Restrict the web API key** and enable App Check (§3.4). Free, console-only.

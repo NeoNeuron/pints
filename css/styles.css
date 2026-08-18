@@ -22,7 +22,12 @@ body {
   background: var(--bg);
 }
 
-.wrap { max-width: 62rem; margin: 0 auto; padding: 0 1.25rem; }
+/* padding-inline rather than the `padding` shorthand. As a shorthand this also
+   set padding-block:0, and a class beats an element selector, so it silently
+   overrode `main`'s own padding-block on every page — the copy sat flush against
+   the header. The header, hero and footer wraps set padding-block explicitly and
+   are unaffected either way. */
+.wrap { max-width: 62rem; margin: 0 auto; padding-inline: 1.25rem; }
 .prose { max-width: var(--measure); }
 .prose h1, .prose h2, .prose h3 { line-height: 1.25; margin: 2rem 0 .5rem; }
 .prose p, .prose ul, .prose ol { margin: 0 0 1rem; }
@@ -35,7 +40,12 @@ a { color: var(--accent); }
 /* Header and nav */
 .site-header { border-bottom: 1px solid var(--line); background: var(--bg-soft); }
 .site-header .wrap { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem 1.5rem; padding-block: .85rem; }
-.brand { font-weight: 700; font-size: 1.35rem; color: var(--ink); text-decoration: none; letter-spacing: .02em; white-space: nowrap; }
+/* The brand is the PINTS mark rather than the word. Sized by height so the
+   header row keeps the height the 1.35rem bold text used to give it; the brain
+   sits above the cap line, which is why the box is a little taller than the
+   letters look. */
+.brand { display: flex; align-items: center; text-decoration: none; }
+.brand img { display: block; height: 1.85rem; width: auto; }
 .site-nav { display: flex; flex-wrap: wrap; gap: .25rem 1.05rem; margin-left: auto; }
 /* nowrap so a two-word label like "My account" can never break mid-label and
    drag the row height with it. */
@@ -52,12 +62,27 @@ a { color: var(--accent); }
 .site-footer .wrap { padding-block: 1.5rem; color: var(--muted); font-size: .9rem; }
 
 main { padding-block: 2rem 1rem; }
+/* The home page's hero is a filled band, not just a rule: its bottom edge needs
+   more clearance than a plain header before the copy starts, or the two read as
+   one block. */
+.hero + main { padding-top: 3.5rem; }
 
 /* Hero */
 .hero { background: var(--accent-soft); border-bottom: 1px solid var(--line); }
-.hero .wrap { padding-block: 3rem; }
-.hero h1 { margin: 0 0 .5rem; font-size: clamp(1.9rem, 5vw, 3rem); line-height: 1.1; }
-.hero .meta { font-size: 1.05rem; color: var(--muted); margin: 0; }
+/* Asymmetric on purpose: the action row is the last thing in the hero and needs
+   little room under it, while the band itself has to read as separate from the
+   copy that follows (see main's padding-top). */
+.hero .wrap { padding-block: 3rem 1.75rem; }
+/* The h1 holds only the logo image, so it carries no type of its own. `font:
+   inherit` matters beyond tidiness: --measure is 68ch, and ch is the width of
+   the element's own "0" — under the h1's bold display font that came out 9%
+   wider than the identical rule on .prose. */
+.hero h1 { margin: 0 0 .5rem; font: inherit; }
+/* index.html puts the header logo inside the h1, so the h1's own margin still
+   does the spacing. Capped at --measure, the same width the prose column below
+   uses, so the hero and the page copy share one left-to-right rhythm rather than
+   the logo floating short of the text. */
+.hero h1 .logo { display: block; width: 100%; max-width: var(--measure); height: auto; }
 
 /* Cards, tables, forms */
 figure { margin: 1rem 0; }

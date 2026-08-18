@@ -17,14 +17,21 @@ export function mountLayout() {
     const wrap = document.createElement("div");
     wrap.className = "wrap";
 
-    // Name only, no tagline. With seven nav items plus up to two auth links, the
-    // tagline pushed the whole nav onto a second row for signed-in users. The
-    // full name still appears in every <title>, the home hero, and the footer.
+    // The mark only, no tagline and no date. With seven nav items plus up to two
+    // auth links, the tagline pushed the whole nav onto a second row for
+    // signed-in users. The full name still appears in every <title>, the home
+    // hero, and the footer. The <img> alt is what names this link, so it stays
+    // the site name rather than describing the artwork.
     const brand = document.createElement("a");
     brand.className = "brand";
     brand.href = "index.html";
-    brand.textContent = SITE_NAME;
     brand.title = SITE_TAGLINE;
+    const mark = document.createElement("img");
+    mark.src = "assets/pints-mark.svg";
+    mark.alt = SITE_NAME;
+    mark.width = 259;
+    mark.height = 74;
+    brand.append(mark);
 
     const nav = document.createElement("nav");
     nav.className = "site-nav";
