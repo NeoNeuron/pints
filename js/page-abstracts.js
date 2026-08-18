@@ -1,115 +1,106 @@
 import { mountLayout, setAuthLink } from "./layout.js";
 import { warnIfUnconfigured } from "./firebase.js";
 import { onUser } from "./auth.js";
-import { listPublicAbstracts } from "./db.js";
-import { authorLineParts, filterAbstracts, sortPublicAbstracts } from "./abstract-utils.mjs";
-import { ABSTRACT_TOPICS, TOPIC_LABELS } from "./config.mjs";
-import { renderAbstractHtml } from "./markdown.js";
+import { getPublicAbstract, listPublicAbstracts } from "./db.js";
+import { filterAbstracts, sortPublicAbstracts } from "./abstract-utils.mjs";
+import { abstractCard, abstractPermalink } from "./abstract-card.js";
+import { ABSTRACT_TOPICS, SITE_NAME, TOPIC_LABELS } from "./config.mjs";
 import { hydrateMarkdownHosts } from "./content-hydrate.js";
 
 mountLayout();
 onUser(({ user, isAdmin }) => setAuthLink({ signedIn: Boolean(user), isAdmin }));
-
-await hydrateMarkdownHosts();
 
 const listEl = document.getElementById("list");
 const countEl = document.getElementById("count");
 const msg = document.getElementById("msg");
 const queryEl = document.getElementById("q");
 const topicEl = document.getElementById("topic");
+const filtersEl = document.getElementById("filters");
+const guidelinesEl = document.getElementById("guidelines");
+const headingEl = document.querySelector("main h1");
 
-function card(abstract) {
-  const article = document.createElement("article");
-  article.className = "card";
+// ?a=<id> asks for one abstract by itself, which is what a shared link is. The
+// list is the default, so an absent or unknown parameter degrades to it rather
+// than to an error page.
+const wanted = new URLSearchParams(location.search).get("a");
 
-  const h3 = document.createElement("h3");
-  if (abstract.type === "poster" && abstract.posterNumber) {
-    const number = document.createElement("span");
-    number.className = "poster-no";
-    number.textContent = `P${abstract.posterNumber} `;
-    h3.append(number);
-  } else if (abstract.type === "talk") {
-    const pill = document.createElement("span");
-    pill.className = "pill";
-    pill.textContent = "talk";
-    h3.append(pill, " ");
-  }
-  // textContent for the title: untrusted input.
-  h3.append(document.createTextNode(abstract.title ?? ""));
+if (wanted) await mountOne(wanted);
+else await mountList();
 
-  const byline = document.createElement("p");
-  byline.className = "byline";
-  authorLineParts(abstract.authors).forEach((part, i) => {
-    if (i) byline.append(document.createTextNode(", "));
-    const name = document.createElement(part.presenting ? "strong" : "span");
-    name.textContent = part.name;
-    byline.append(name);
-    if (part.marks) {
-      const sup = document.createElement("sup");
-      sup.textContent = part.marks;
-      byline.append(sup);
+/** A shared link: one abstract, no filters, and a way back to the rest. */
+async function mountOne(id) {
+  // The poster guidelines are advice for people about to submit, not context for
+  // a shared abstract, so this view drops them rather than hydrating them.
+  guidelinesEl.remove();
+  filtersEl.hidden = true;
+  countEl.hidden = true;
+
+  if (warnIfUnconfigured(msg)) return;
+  try {
+    const abstract = await getPublicAbstract(id);
+    if (!abstract) {
+      headingEl.textContent = "Abstract not found";
+      msg.className = "msg warn";
+      // Deliberately vague about which: abstracts_public holds only accepted
+      // ones, so "no such abstract" and "not accepted (yet)" are the same read,
+      // and guessing between them would leak a decision that is not ours to
+      // announce.
+      msg.textContent = "That abstract is not in the public list. Only accepted "
+        + "abstracts are published here.";
+      listEl.append(backLink());
+      return;
     }
-  });
+    // The card's own heading becomes the page heading, rather than printing the
+    // title twice: it is the same string, and only the card's version carries
+    // the poster number and the talk pill.
+    headingEl.remove();
+    // The tab and any link preview should name the abstract, not the section.
+    document.title = `${abstract.title ?? "Abstract"} — ${SITE_NAME}`;
+    listEl.replaceChildren(
+      abstractCard(abstract, { headingLevel: "h1" }),
+      backLink(),
+    );
+  } catch (err) {
+    msg.className = "msg err";
+    msg.textContent = "Could not load that abstract.";
+    console.error("[pints] abstract", err);
+  }
+}
 
-  const affil = document.createElement("p");
-  affil.className = "byline";
-  affil.textContent = (abstract.affiliations ?? []).map((a, i) => `${i + 1}. ${a}`).join("   ");
+function backLink() {
+  const p = document.createElement("p");
+  const a = document.createElement("a");
+  a.href = "abstracts.html";
+  a.textContent = "← All abstracts";
+  p.append(a);
+  return p;
+}
 
-  const body = document.createElement("div");
-  // The only innerHTML here, and only through the tight untrusted allowlist.
-  body.innerHTML = renderAbstractHtml(abstract.body);
+async function mountList() {
+  await hydrateMarkdownHosts();
 
-  const meta = document.createElement("p");
-  if (abstract.topic) {
-    const pill = document.createElement("span");
-    pill.className = "pill";
-    pill.textContent = TOPIC_LABELS[abstract.topic] ?? abstract.topic;
-    meta.append(pill);
+  const anyTopic = document.createElement("option");
+  anyTopic.value = "";
+  anyTopic.textContent = "All topics";
+  topicEl.append(anyTopic);
+  for (const topic of ABSTRACT_TOPICS) {
+    const option = document.createElement("option");
+    option.value = topic;
+    option.textContent = TOPIC_LABELS[topic] ?? topic;
+    topicEl.append(option);
   }
 
-  // Built with createElement, never through the markdown renderer:
-  // ABSTRACT_ALLOWLIST forbids <img> in a submitted body and must keep doing so.
-  // The caption is participant input too, so it goes in as text, not markup.
-  const figure = document.createElement("figure");
-  if (abstract.figureUrl) {
-    const img = document.createElement("img");
-    img.src = abstract.figureUrl;
-    img.alt = abstract.figureCaption
-      || `Figure for “${abstract.title ?? "this abstract"}”`;
-    img.loading = "lazy";
-    figure.append(img);
-    if (abstract.figureCaption) {
-      const caption = document.createElement("figcaption");
-      caption.textContent = abstract.figureCaption;
-      figure.append(caption);
-    }
-  }
+  if (warnIfUnconfigured(msg)) return;
 
-  article.append(h3, meta, byline, affil, body, figure);
-  return article;
-}
+  let all = [];
+  const draw = () => {
+    const byTopic = topicEl.value ? all.filter((a) => a.topic === topicEl.value) : all;
+    const shown = filterAbstracts(byTopic, queryEl.value);
+    countEl.textContent = `${shown.length} of ${all.length} shown.`;
+    listEl.replaceChildren(...shown.map((a) =>
+      abstractCard(a, { permalink: abstractPermalink(a.id) })));
+  };
 
-let all = [];
-
-function draw() {
-  const byTopic = topicEl.value ? all.filter((a) => a.topic === topicEl.value) : all;
-  const shown = filterAbstracts(byTopic, queryEl.value);
-  countEl.textContent = `${shown.length} of ${all.length} shown.`;
-  listEl.replaceChildren(...shown.map(card));
-}
-
-const anyTopic = document.createElement("option");
-anyTopic.value = "";
-anyTopic.textContent = "All topics";
-topicEl.append(anyTopic);
-for (const topic of ABSTRACT_TOPICS) {
-  const option = document.createElement("option");
-  option.value = topic;
-  option.textContent = TOPIC_LABELS[topic] ?? topic;
-  topicEl.append(option);
-}
-
-if (!warnIfUnconfigured(msg)) {
   try {
     all = sortPublicAbstracts(await listPublicAbstracts());
     if (!all.length) {

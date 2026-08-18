@@ -8,6 +8,7 @@ import {
   groupByTopic,
   nextPosterNumber,
   sortPublicAbstracts,
+  submissionStatusLabel,
 } from "../js/abstract-utils.mjs";
 
 test("authorLineParts renders 1-based affiliation marks", () => {
@@ -254,4 +255,28 @@ test("the talk filter combines with the others", () => {
   assert.deepEqual(ids(filterAdminAbstracts(pile,
     { talk: "optedout", type: "talk" })), [],
   "somebody who opted out and was promoted anyway would show up here");
+});
+
+test("submissionStatusLabel names the decision once one has been taken", () => {
+  assert.equal(submissionStatusLabel("submitted"), "In review");
+  assert.equal(submissionStatusLabel("rejected"), "Not accepted");
+  assert.equal(submissionStatusLabel("withdrawn"), "Withdrawn");
+  assert.equal(submissionStatusLabel("accepted", { type: "talk" }), "Accepted as a talk");
+  assert.equal(submissionStatusLabel("accepted", { type: "poster" }), "Accepted as a poster");
+  assert.equal(
+    submissionStatusLabel("accepted", { type: "poster", posterNumber: 12 }),
+    "Accepted as poster P12");
+});
+
+test("submissionStatusLabel says only 'Accepted' with no published copy to read", () => {
+  assert.equal(submissionStatusLabel("accepted"), "Accepted");
+  assert.equal(submissionStatusLabel("accepted", null), "Accepted");
+  assert.equal(submissionStatusLabel("accepted", { type: "poster", posterNumber: "3" }),
+    "Accepted as a poster");
+});
+
+test("submissionStatusLabel under-claims on anything it does not recognise", () => {
+  for (const odd of ["", null, undefined, "banquet"]) {
+    assert.equal(submissionStatusLabel(odd), "In review");
+  }
 });

@@ -194,6 +194,21 @@ export async function listAbstracts() {
   return (await getDocs(q)).docs.map(snapData);
 }
 
+/**
+ * One published abstract, for a shared link.
+ *
+ * A direct get rather than a filter over listPublicAbstracts(): a link that
+ * lands on one abstract should cost one read, not the whole collection. Returns
+ * null both when the id is unknown and when it belongs to another edition, so a
+ * link shared last year does not surface the wrong meeting's poster.
+ */
+export async function getPublicAbstract(id) {
+  const snap = await getDoc(doc(db, "abstracts_public", id));
+  if (!snap.exists()) return null;
+  const abstract = snapData(snap);
+  return abstract.edition === CURRENT_EDITION ? abstract : null;
+}
+
 export async function listPublicAbstracts() {
   const q = query(collection(db, "abstracts_public"), where("edition", "==", CURRENT_EDITION));
   return (await getDocs(q)).docs.map(snapData);

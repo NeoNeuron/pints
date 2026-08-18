@@ -89,8 +89,18 @@ figure { margin: 1rem 0; }
 figcaption { margin-top: .35rem; max-width: var(--measure); color: var(--muted); font-size: .9rem; }
 
 .card { border: 1px solid var(--line); border-radius: var(--radius); padding: 1rem 1.25rem; margin-bottom: 1rem; background: var(--bg); }
-.card h3 { margin: 0 0 .25rem; }
+/* h1 when the card is a whole page (a shared abstract link), h3 in a list.
+   Sized here rather than by level, so one abstract does not shout just
+   because it happens to be alone on the page. */
+.card :is(h1, h2, h3) { margin: 0 0 .25rem; font-size: 1.25rem; }
 .card .byline { color: var(--muted); font-size: .92rem; margin: 0 0 .5rem; }
+/* Status, topic and the share link share one line above the byline. */
+.card .card-meta { margin: 0 0 .5rem; }
+.card .card-meta:empty { display: none; }
+/* The decision, not a label: it reads as a statement about this abstract, so it
+   takes the accent rather than the neutral chrome the topic pill uses. */
+.pill.status { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); font-weight: 600; }
+.permalink { font-size: .85rem; }
 
 /* The abstract-submission disclosure on account.html. Closed by default, so the
    summary has to read as a button people can find. */

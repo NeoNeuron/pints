@@ -7,7 +7,7 @@ import {
 } from "./abstract-validation-utils.mjs";
 import { draftFingerprint } from "./abstract-utils.mjs";
 import { validateFigure } from "./figure-utils.mjs";
-import { renderAbstractHtml } from "./markdown.js";
+import { abstractCard } from "./abstract-card.js";
 import { deleteAbstract, getSiteConfig, saveAbstract } from "./db.js";
 import { deleteFigure, uploadFigure } from "./storage.js";
 
@@ -91,7 +91,9 @@ const TEMPLATE = `
     </div>
 
     <h3>Preview</h3>
-    <div id="abs-preview" class="card"></div>
+    <p class="hint">Exactly what the abstract list will show, figure and caption
+      included. It updates as you type.</p>
+    <div id="abs-preview"></div>
 
     <!-- Beside the button, not at the top of the form. Validation errors and save
          results belong where the eye already is when Submit is pressed; a list of
@@ -107,7 +109,7 @@ const TEMPLATE = `
   </form>
 `;
 
-function authorRow({ name = "", marks = "", presenting = false } = {}) {
+function authorRow({ name = "", marks = "", presenting = false } = {}, onChange = () => {}) {
   const tr = document.createElement("tr");
   tr.innerHTML = `
     <td><input type="text" class="a-name" maxlength="120"></td>
@@ -117,7 +119,11 @@ function authorRow({ name = "", marks = "", presenting = false } = {}) {
   tr.querySelector(".a-name").value = name;
   tr.querySelector(".a-marks").value = marks;
   tr.querySelector(".a-presenting").checked = presenting;
-  tr.querySelector(".a-remove").addEventListener("click", () => tr.remove());
+  // Removing a row fires no input event, so the preview has to be told.
+  tr.querySelector(".a-remove").addEventListener("click", () => {
+    tr.remove();
+    onChange();
+  });
   return tr;
 }
 
@@ -246,7 +252,13 @@ export async function mountAbstractForm(
   let figurePath = abstract?.figurePath ?? null;
   let figureCleared = false;
 
+  // The src the preview draws: an object: URL for a pending file, the stored
+  // URL otherwise, null once removed. Kept beside figurePreview.hidden rather
+  // than read back off the <img>, which holds a stale src while hidden.
+  let figureSrc = figureUrl;
+
   const showFigure = (src) => {
+    figureSrc = src;
     figurePreview.hidden = !src;
     if (src) figureImg.src = src;
   };
@@ -279,7 +291,7 @@ export async function mountAbstractForm(
         name: author.name,
         marks: (author.affiliationIndexes ?? []).map((i) => i + 1).join(","),
         presenting: author.presenting,
-      }));
+      }, () => refreshPreview()));
     }
     showFigure(figureUrl);
     saveBtn.textContent = "Save changes";
@@ -292,7 +304,8 @@ export async function mountAbstractForm(
     // The author row below defaults to affiliation "1", so seeding the box from
     // the profile is what makes that mark point at something.
     affEl.value = defaultAffiliation;
-    authorsEl.append(authorRow({ name: defaultAuthorName, marks: "1", presenting: true }));
+    authorsEl.append(authorRow(
+      { name: defaultAuthorName, marks: "1", presenting: true }, () => refreshPreview()));
   }
 
   // Only an accepted abstract is locked, matching the rules: its public copy
@@ -405,46 +418,6 @@ export async function mountAbstractForm(
     $(".actions").append(cancelBtn);
   }
 
-  const refreshPreview = () => {
-    $("#abs-preview").innerHTML = renderAbstractHtml(bodyEl.value);
-    $("#abs-count").textContent = `${bodyEl.value.length} / ${LIMITS.body}`;
-  };
-  bodyEl.addEventListener("input", refreshPreview);
-  refreshPreview();
-
-  const refreshCaptionCount = () => {
-    $("#abs-caption-count").textContent =
-      `${captionEl.value.length} / ${LIMITS.figureCaption}`;
-  };
-  captionEl.addEventListener("input", refreshCaptionCount);
-  refreshCaptionCount();
-
-  $("#abs-add-author").addEventListener("click", () => authorsEl.append(authorRow()));
-
-  figureEl.addEventListener("change", () => {
-    const file = figureEl.files?.[0] ?? null;
-    if (!file) return;
-    const { valid, errors } = validateFigure({ type: file.type, size: file.size });
-    if (!valid) {
-      figureEl.value = "";
-      return sayErrors(errors);
-    }
-    pendingFile = file;
-    figureCleared = false;
-    showFigure(URL.createObjectURL(file));
-    say("Figure ready. It is uploaded when you submit the form.", "ok");
-  });
-
-  figureRemove.addEventListener("click", () => {
-    pendingFile = null;
-    figureEl.value = "";
-    figureCleared = Boolean(figurePath);
-    showFigure(null);
-    // Removing it is allowed; saving without one is not. Say so now rather than
-    // letting them fill the rest of the form and hit the error at the end.
-    say("Figure removed. Choose another before saving — a figure is required.", "warn");
-  });
-
   // `hasFigure` reduces the two ways a figure can be present — a File waiting to
   // upload, or an object already in Storage — to the one fact the pure validator
   // needs, so "a figure is required" is enforced in a tested function rather than
@@ -462,6 +435,55 @@ export async function mountAbstractForm(
     talkConsidered: !noTalkEl.checked,
     figureCaption: captionEl.value,
     hasFigure: Boolean(pendingFile) || Boolean(figureUrl && !figureCleared),
+  });
+
+  // The preview is the published card, drawn by the same function the abstract
+  // list uses — a second, simpler renderer here would quietly turn "this is what
+  // will be published" into a guess. The type and poster number are left off:
+  // they are the committee's to assign, and showing them would promise a
+  // decision that has not been taken.
+  const refreshPreview = () => {
+    $("#abs-preview").replaceChildren(
+      abstractCard({ ...collect(), figureUrl: figureSrc }));
+    $("#abs-count").textContent = `${bodyEl.value.length} / ${LIMITS.body}`;
+    $("#abs-caption-count").textContent =
+      `${captionEl.value.length} / ${LIMITS.figureCaption}`;
+  };
+  // On the form rather than on each field: author rows come and go, and a
+  // listener per input would miss every row added after mount.
+  form.addEventListener("input", refreshPreview);
+  form.addEventListener("change", refreshPreview);
+  refreshPreview();
+
+  $("#abs-add-author").addEventListener("click", () => {
+    authorsEl.append(authorRow({}, refreshPreview));
+    refreshPreview();
+  });
+
+  figureEl.addEventListener("change", () => {
+    const file = figureEl.files?.[0] ?? null;
+    if (!file) return;
+    const { valid, errors } = validateFigure({ type: file.type, size: file.size });
+    if (!valid) {
+      figureEl.value = "";
+      return sayErrors(errors);
+    }
+    pendingFile = file;
+    figureCleared = false;
+    showFigure(URL.createObjectURL(file));
+    refreshPreview();
+    say("Figure ready. It is uploaded when you submit the form.", "ok");
+  });
+
+  figureRemove.addEventListener("click", () => {
+    pendingFile = null;
+    figureEl.value = "";
+    figureCleared = Boolean(figurePath);
+    showFigure(null);
+    refreshPreview();
+    // Removing it is allowed; saving without one is not. Say so now rather than
+    // letting them fill the rest of the form and hit the error at the end.
+    say("Figure removed. Choose another before saving — a figure is required.", "warn");
   });
 
   // Taken once the fields are populated, so "dirty" means changed by the person

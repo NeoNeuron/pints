@@ -129,3 +129,29 @@ export function draftFingerprint(draft) {
     String(draft?.figureCaption ?? "").trim(),
   ]);
 }
+
+/**
+ * Where a submission stands, in words its author can act on.
+ *
+ * `status` is the private document's; `published` is the `abstracts_public`
+ * copy, which is the only place the poster/talk decision and the board number
+ * live. An accepted abstract with no public copy is a half-finished
+ * acceptance in the console, so it says only "Accepted".
+ *
+ * Anything unrecognised reads as "In review" deliberately: a wrong label here
+ * is a promise to a participant, and under-claiming is the safe direction.
+ */
+export function submissionStatusLabel(status, published = null) {
+  if (status === "accepted") {
+    if (published?.type === "talk") return "Accepted as a talk";
+    if (published?.type === "poster") {
+      return Number.isInteger(published.posterNumber)
+        ? `Accepted as poster P${published.posterNumber}`
+        : "Accepted as a poster";
+    }
+    return "Accepted";
+  }
+  if (status === "rejected") return "Not accepted";
+  if (status === "withdrawn") return "Withdrawn";
+  return "In review";
+}

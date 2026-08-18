@@ -1,8 +1,10 @@
 import { mountLayout, setAuthLink } from "./layout.js";
 import { warnIfUnconfigured } from "./firebase.js";
 import { createSubmitterAccount, friendlyAuthError, onUser, sendReset } from "./auth.js";
-import { getMyAbstract, getProfile, saveProfile } from "./db.js";
+import { getMyAbstract, getProfile, getPublicAbstract, saveProfile } from "./db.js";
 import { mountAbstractForm } from "./abstract-form.js";
+import { abstractCard, abstractPermalink } from "./abstract-card.js";
+import { submissionStatusLabel } from "./abstract-utils.mjs";
 import { withNext } from "./redirect-utils.mjs";
 
 /**
@@ -23,8 +25,14 @@ mountLayout();
 
 const msg = document.getElementById("msg");
 const host = document.getElementById("form-host");
+const submittedEl = document.getElementById("submitted");
 const intro = document.getElementById("intro");
 const welcome = document.getElementById("welcome");
+
+// Everything mount() learned, so the two views can be swapped without re-reading
+// the profile each time. `user` is mutable: a guest submission creates the
+// account midway through the save, and the confirmation needs the uid it got.
+const state = { user: null, isAdmin: false, profile: null };
 
 // Set by ensureAccount when this submission also created an account, and read
 // once the abstract lands. Two separate things happened and the person needs to
@@ -59,37 +67,106 @@ async function mount(user, isAdmin) {
     ? await Promise.all([getProfile(user.uid), getMyAbstract(user.uid)])
     : [null, null];
 
-  if (mine) {
-    intro.textContent = "You have already submitted an abstract — this is it. "
-      + "You can edit it until the deadline.";
-  } else if (!user) {
+  state.user = user;
+  state.isAdmin = isAdmin;
+  state.profile = profile;
+
+  // An abstract already on file is a thing to read, not a form to fill. The
+  // editor is one button away, which is the right ratio: most visits after the
+  // first are to check what was sent, not to change it.
+  if (mine) return showSubmitted(mine);
+
+  if (!user) {
     const signIn = document.createElement("a");
     signIn.href = withNext("login.html", "submit.html");
     signIn.textContent = "sign in";
     intro.append(document.createTextNode(" You do not need an account first: "
       + "submitting creates one. Already have one? "), signIn, document.createTextNode("."));
   }
+  await showForm(null);
+}
 
+/** The editor. `abstract` null is a first submission; otherwise an edit. */
+async function showForm(abstract) {
+  submittedEl.replaceChildren();
   await mountAbstractForm(host, {
-    user,
-    isAdmin,
-    abstract: mine,
-    defaultAuthorName: profile?.displayName ?? "",
-    defaultAffiliation: profile?.affiliation ?? "",
-    defaultEmail: user?.email ?? "",
+    user: state.user,
+    isAdmin: state.isAdmin,
+    abstract,
+    defaultAuthorName: state.profile?.displayName ?? "",
+    defaultAffiliation: state.profile?.affiliation ?? "",
+    defaultEmail: state.user?.email ?? "",
     // Offered even to a signed-in submitter, which is what puts the read-only
     // "we will write to you here" line on the form. It is only ever CALLED when
     // there is no user.
     ensureAccount,
-    onSaved: () => {
-      if (mine) return;
+    // Only when editing: on a first submission there is nothing to go back to.
+    onCancel: abstract ? () => showSubmitted(abstract) : null,
+    onSaved: async () => {
+      // Re-read rather than reuse the draft: the record that matters is the one
+      // Firestore actually holds, and the confirmation should show that.
+      const saved = state.user ? await getMyAbstract(state.user.uid) : null;
       if (registered) showWelcome();
-      else {
-        say("Abstract received. You can come back and edit it until the "
-          + "deadline.", "ok");
-      }
+      else if (abstract) say("Abstract updated.", "ok");
+      else say("Abstract received. You can come back and edit it until the deadline.", "ok");
+      if (saved) await showSubmitted(saved);
     },
   });
+}
+
+/**
+ * The abstract as submitted, rendered exactly as the public list renders it.
+ *
+ * Showing the filled-in form again after a save answers "did it work?" with the
+ * same screen that was on display before the button was pressed — the green line
+ * is the only difference, and it is easy to miss. The card is the other half of
+ * the answer: it is what the organizers will read, so it is what should be shown
+ * back.
+ */
+async function showSubmitted(abstract) {
+  host.replaceChildren();
+  host.hidden = true;
+  intro.textContent = "One abstract per person. You can edit yours until the "
+    + "deadline.";
+
+  // The poster/talk decision and the board number live only on the public copy,
+  // so a decided abstract costs one extra read and an undecided one costs none.
+  const published = abstract.status === "accepted"
+    ? await getPublicAbstract(abstract.id).catch((err) => {
+      console.error("[pints] getPublicAbstract", err);
+      return null;
+    })
+    : null;
+
+  const card = abstractCard(abstract, {
+    statusLabel: submissionStatusLabel(abstract.status, published),
+    // Only once it is public. A link to an abstract still in review resolves for
+    // its author and for nobody else, which is a worse thing to hand somebody
+    // than no link at all.
+    permalink: published ? abstractPermalink(abstract.id) : null,
+    headingLevel: "h2",
+  });
+
+  const actions = document.createElement("div");
+  actions.className = "actions";
+  const edit = document.createElement("button");
+  edit.type = "button";
+  edit.textContent = "Edit submission";
+  edit.addEventListener("click", () => {
+    host.hidden = false;
+    showForm(abstract);
+  });
+  actions.append(edit);
+
+  if (published) {
+    const note = document.createElement("span");
+    note.className = "muted";
+    note.textContent = "Accepted abstracts are frozen — ask an organizer to change one.";
+    actions.append(note);
+  }
+
+  card.append(actions);
+  submittedEl.replaceChildren(card);
 }
 
 /**
@@ -129,6 +206,8 @@ async function ensureAccount({ displayName, affiliation, email }) {
   // account exists, so they do not try to submit again and hit
   // auth/email-already-in-use.
   registered = { email: user.email, passwordEmailSent };
+  // onSaved reads the abstract back by uid, and until now there was no uid.
+  state.user = user;
   say(`Account created for ${user.email}. Saving your abstract…`, "ok");
 
   return user;
@@ -149,11 +228,6 @@ async function ensureAccount({ displayName, affiliation, email }) {
 function showWelcome() {
   msg.className = "msg";
   msg.textContent = "";
-  // "You do not need an account — already have one? sign in" is now wrong twice
-  // over, and they have just been handed one.
-  intro.textContent = "One abstract per person. You can edit yours until the "
-    + "deadline by signing in.";
-
   const head = document.createElement("div");
   head.className = "panel-head";
   head.textContent = registered.passwordEmailSent

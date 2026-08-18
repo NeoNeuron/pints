@@ -667,6 +667,51 @@ unnamed banner. An id outside the vocabulary is also treated as no session at
 render time, so shrinking `SCHEDULE_SESSIONS` between editions degrades to a loose
 row rather than an empty banner.
 
+### 7.14 The preview had to become the card, not resemble it
+
+The submission form's preview rendered the abstract body and nothing else — no
+figure, no caption, no authors — while the published card rendered all of it. Two
+renderers, one of them quietly wrong, and the wrong one was the one shown to the
+person deciding whether their submission was ready.
+
+The fix was to delete the second renderer rather than teach it the missing parts.
+`js/abstract-card.js` is now the only function that draws an abstract, called by
+the public list, the preview, and the post-submission confirmation. The preview
+feeds it a draft straight out of the form with `figureUrl` pointed at the object:
+URL of the not-yet-uploaded file, so what is on screen is the real card fed real
+input. It deliberately omits the poster number and the talk pill: those are the
+committee's to assign, and showing them would promise a decision nobody has taken.
+
+Two mechanical notes worth keeping. The preview listens on the **form**, not on
+each field, because author rows are added and removed after mount and a
+per-field listener misses every row that did not exist at mount time; row removal
+and the figure controls fire no `input` event at all and call the refresh
+directly. And `collect()` had to move above the preview: it was declared after
+it, and the first `refreshPreview()` call ran while it was still in its temporal
+dead zone.
+
+### 7.15 A submission you cannot see is a submission you do not trust
+
+Pressing Submit left the filled-in form exactly where it was and added a green
+line above it. Everything about the screen said "nothing happened", which is the
+opposite of what a person needs at the one moment they are wondering whether
+their work arrived.
+
+`submit.html` now answers with the record itself: the stored abstract, re-read
+from Firestore rather than echoed from the draft, drawn as the same card the
+organizers will read, with an **Edit submission** button on it. Arriving later
+with an abstract already on file lands in the same view — it is the same state,
+and two different screens for one state is how a page starts lying.
+
+Sharing came with the same work, and it has one real constraint:
+**`abstracts_public` holds accepted abstracts only.** So `abstracts.html?a=<id>`
+can serve a link anybody can open, but only after a decision. Offering a
+submitter a link to an abstract still in review would hand them a URL that works
+for exactly one person — themselves — which is worse than offering none, so the
+link appears only once the abstract is public. The unknown-id and the
+not-accepted cases give the same answer for a related reason: distinguishing them
+would announce a decision through a 404.
+
 ## 8. Open items
 
 - **Restrict the web API key** and enable App Check (§3.4). Free, console-only.

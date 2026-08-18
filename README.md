@@ -134,6 +134,35 @@ editable, and with a single slot per person that matters more than it used to: a
 rejected participant would otherwise be unable to revise, delete, or replace
 their submission, because there is nowhere else to put a second attempt.
 
+### One renderer, three places
+
+`js/abstract-card.js` draws an abstract, and it is the only thing that does: the
+public list, the live preview inside the submission form, and the confirmation
+shown after a submission all call it. That is what lets the form promise "exactly
+what the abstract list will show" — with a second renderer nearby the promise
+would be a guess. The preview updates on every keystroke and includes the figure
+and its caption; it leaves out the poster number and the talk pill, which are the
+committee's to assign.
+
+After a save, `submit.html` shows the stored abstract as that same card, with the
+status and an **Edit submission** button, rather than leaving the filled-in form
+on screen behind a green line. Arriving with an abstract already on file shows the
+same view, because it is the same state.
+
+### Sharing an abstract
+
+`abstracts.html?a=<id>` renders one abstract on its own, sets the tab title to
+its title, and offers a way back to the list; every card in the list carries that
+link. The status a submitter sees is **In review** until a decision is taken and
+then **Accepted as a talk** or **Accepted as poster P12**
+(`submissionStatusLabel`).
+
+The share link appears **only once the abstract is accepted**. `abstracts_public`
+is the world-readable copy and holds accepted abstracts only; a link to one still
+in review resolves for its author and for nobody else, which is worse than no
+link. For the same reason an unknown id and an unaccepted one give the same
+answer — saying which would leak a decision that is not the site's to announce.
+
 ### Submitting without an account
 
 `submit.html` works signed out. The form carries a "Your details" block — name,
