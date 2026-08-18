@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   describeReviewStats, isScore, reviewScoreMatrix, reviewStats, reviewerList, scoreOptions,
-  summariseScore,
+  sortByMeanScore, sortByTitle, summariseScore,
 } from "../js/review-utils.mjs";
 import { toCsv } from "../js/csv-utils.mjs";
 
@@ -153,4 +153,67 @@ test("summariseScore takes reviewStats output directly", () => {
   const stats = reviewStats({ a: { score: 8 }, b: { score: 7 }, c: { note: "no number" } });
   // Three organizers said something, two put a number on it.
   assert.equal(summariseScore(stats), "7.5 · 2 scored");
+});
+
+const scored = (pairs) => new Map(Object.entries(pairs).map(([id, scores]) => [
+  id,
+  { reviews: Object.fromEntries(scores.map((score, i) => [`r${i}`, { score }])) },
+]));
+
+test("sortByMeanScore puts the best first", () => {
+  const list = [{ id: "a", title: "A" }, { id: "b", title: "B" }, { id: "c", title: "C" }];
+  const reviewsById = scored({ a: [5, 5], b: [9, 8], c: [7] });
+  assert.deepEqual(sortByMeanScore(list, { reviewsById }).map((x) => x.id), ["b", "c", "a"]);
+});
+
+test("sortByMeanScore reverses on request", () => {
+  const list = [{ id: "a", title: "A" }, { id: "b", title: "B" }, { id: "c", title: "C" }];
+  const reviewsById = scored({ a: [5, 5], b: [9, 8], c: [7] });
+  assert.deepEqual(
+    sortByMeanScore(list, { reviewsById, direction: "asc" }).map((x) => x.id),
+    ["a", "c", "b"]);
+});
+
+test("sortByMeanScore keeps unscored abstracts last in BOTH directions", () => {
+  // "No score" is not a low score: ascending must not bury the worst-rated
+  // abstract under everything nobody has looked at yet.
+  const list = [{ id: "none", title: "Unscored" }, { id: "low", title: "Low" },
+    { id: "high", title: "High" }];
+  const reviewsById = scored({ low: [2], high: [9] });
+  assert.deepEqual(sortByMeanScore(list, { reviewsById }).map((x) => x.id),
+    ["high", "low", "none"]);
+  assert.deepEqual(sortByMeanScore(list, { reviewsById, direction: "asc" }).map((x) => x.id),
+    ["low", "high", "none"]);
+});
+
+test("sortByMeanScore breaks ties on title, so renders are stable", () => {
+  const list = [{ id: "b", title: "Beta" }, { id: "a", title: "Alpha" }];
+  const reviewsById = scored({ a: [7], b: [7] });
+  assert.deepEqual(sortByMeanScore(list, { reviewsById }).map((x) => x.id), ["a", "b"]);
+  // Unscored ties too.
+  assert.deepEqual(sortByMeanScore(list, { reviewsById: new Map() }).map((x) => x.id),
+    ["a", "b"]);
+});
+
+test("sortByMeanScore ignores notes without a number", () => {
+  const list = [{ id: "a", title: "A" }, { id: "b", title: "B" }];
+  const reviewsById = new Map([
+    ["a", { reviews: { r0: { note: "interesting" } } }],
+    ["b", { reviews: { r0: { score: 4 } } }],
+  ]);
+  // `a` has an opinion but no vote, so it sorts as unscored.
+  assert.deepEqual(sortByMeanScore(list, { reviewsById }).map((x) => x.id), ["b", "a"]);
+});
+
+test("sortByMeanScore does not mutate its input, and survives nothing", () => {
+  const list = [{ id: "b", title: "B" }, { id: "a", title: "A" }];
+  sortByMeanScore(list, { reviewsById: new Map() });
+  assert.deepEqual(list.map((x) => x.id), ["b", "a"]);
+  assert.deepEqual(sortByMeanScore([]), []);
+  assert.deepEqual(sortByMeanScore(null), []);
+});
+
+test("sortByTitle is alphabetical and case-insensitive", () => {
+  const list = [{ title: "beta" }, { title: "Alpha" }, { title: "Gamma" }];
+  assert.deepEqual(sortByTitle(list).map((x) => x.title), ["Alpha", "beta", "Gamma"]);
 });

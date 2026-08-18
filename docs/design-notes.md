@@ -805,6 +805,29 @@ are about to replace.** The public list has the same disclosures and needs none 
 this, because nothing re-renders it except a filter change — where losing the open
 rows is correct.
 
+### 7.20 Sorting a review pile: the two decisions that are not obvious
+
+The console's order was whatever Firestore returned — arbitrary, and nobody had
+noticed because nobody had tried to read the list as a ranking. Sorting by mean
+score raised two questions worth recording, because the wrong answer to either is
+quietly harmful rather than visibly broken.
+
+**Within a topic, never across.** `groupByTopic` already grouped the pile because
+the committee reviews a topic at a time. Sorting globally would invite comparing
+a cognitive 7.4 against a systems 7.6, which compares two panels' scoring habits,
+not two abstracts. The implementation is one sort of the flat list *before*
+grouping — `groupByTopic` preserves input order, so that orders every group and
+nothing has to sort per bucket.
+
+**Unscored abstracts sort last in both directions.** Treating "no score" as a low
+score is the obvious implementation and it is wrong: under "lowest first" every
+abstract nobody has looked at yet fills the top, and the one the committee
+actually rated worst is buried underneath them. Null is not a small number.
+
+Ties break on title, which matters more here than it looks: this list re-renders
+after every action, and an unstable comparator would shuffle rows under the
+cursor between one click and the next.
+
 ## 8. Open items
 
 - **Restrict the web API key** and enable App Check (§3.4). Free, console-only.

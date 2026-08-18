@@ -236,6 +236,13 @@ scored it — because the review screen has to survive the same hundreds the pub
 list does. Rows open in place, their bodies built on first open, and **open rows
 survive the re-render** that follows every accept, reject and review save.
 
+**Sort within topic** orders each topic group by mean score, highest or lowest
+first, or by title. Always within a topic: a mean of 7.4 in cognitive against 7.6
+in systems compares two panels' scoring habits, not two abstracts. Unscored
+abstracts sort last in *both* directions — "no score" is not a low score, and in
+"lowest first" they would otherwise bury the abstract the committee actually
+rated worst.
+
 It filters on free text, status, presentation (talk / poster / not
 published yet), the submitter's **talk opt-out**, and topic, and both CSV exports
 cover exactly what the filters are showing — the button row says so when they are narrower than the whole pile.

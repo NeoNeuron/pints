@@ -11,7 +11,7 @@ import {
 } from "./abstract-export-utils.mjs";
 import {
   describeReviewStats, reviewScoreMatrix, reviewStats, reviewerList, scoreOptions,
-  summariseScore,
+  sortByMeanScore, sortByTitle, summariseScore,
 } from "./review-utils.mjs";
 import { abstractDeletionPlan, describeAbstractDeletion } from "./deletion-utils.mjs";
 import { renderAbstractHtml } from "./markdown.js";
@@ -103,6 +103,11 @@ export async function mountAbstractsTab(host, { adminUid, user }) {
 
   const filters = { q: "", status: "", type: "", topic: "", talk: "" };
 
+  // Not part of `filters`: it changes the order, not the set, and Clear filters
+  // should not silently reshuffle the list. Highest first by default — before
+  // this the order was whatever Firestore returned, which is to say arbitrary.
+  let sortBy = "score-desc";
+
   // What the last render fetched. The export buttons read it rather than
   // re-fetching, so what lands in the spreadsheet is exactly what is on screen.
   let shown = [];
@@ -161,6 +166,22 @@ export async function mountAbstractsTab(host, { adminUid, user }) {
         ...ABSTRACT_TOPICS.map((t) => ({ value: t, label: TOPIC_LABELS[t] ?? t }))],
     });
 
+    // Within a topic, always: a mean of 7.4 in cognitive against 7.6 in systems
+    // compares two panels' scoring habits, not two abstracts.
+    const sort = picker({
+      label: "Sort within topic",
+      value: sortBy,
+      options: [
+        { value: "score-desc", label: "Score, highest first" },
+        { value: "score-asc", label: "Score, lowest first" },
+        { value: "title", label: "Title" },
+      ],
+    });
+    sort.select.addEventListener("change", () => {
+      sortBy = sort.select.value;
+      render();
+    });
+
     const reset = document.createElement("button");
     reset.className = "secondary";
     reset.type = "button";
@@ -180,7 +201,8 @@ export async function mountAbstractsTab(host, { adminUid, user }) {
       render();
     });
 
-    bar.append(search, status.wrapper, type.wrapper, talk.wrapper, topic.wrapper, reset);
+    bar.append(search, status.wrapper, type.wrapper, talk.wrapper, topic.wrapper,
+      sort.wrapper, reset);
   }
 
   function buildExports() {
@@ -593,6 +615,13 @@ export async function mountAbstractsTab(host, { adminUid, user }) {
     });
   }
 
+  function sortShown(list) {
+    if (sortBy === "title") return sortByTitle(list);
+    return sortByMeanScore(list, {
+      reviewsById, direction: sortBy === "score-asc" ? "asc" : "desc",
+    });
+  }
+
   async function render() {
     // One read each for the whole page, joined in memory — far cheaper than a
     // per-card lookup, and it is what lets a card draw its reviews synchronously.
@@ -605,7 +634,10 @@ export async function mountAbstractsTab(host, { adminUid, user }) {
     reviewers = reviewerList(admins, usersById);
 
     const annotated = annotateAbstracts(abstracts, { published, users });
-    shown = filterAdminAbstracts(annotated, filters);
+    // Sorted before grouping: groupByTopic preserves input order, so ordering
+    // the flat list here is what orders each topic. The exports read `shown`,
+    // so a CSV comes out in the order on screen.
+    shown = sortShown(filterAdminAbstracts(annotated, filters));
 
     const counts = {};
     for (const a of abstracts) counts[a.status] = (counts[a.status] ?? 0) + 1;

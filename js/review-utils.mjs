@@ -69,6 +69,41 @@ export function summariseScore({ mean, count } = {}) {
   return `${mean.toFixed(1)} · ${count} scored`;
 }
 
+const collator = new Intl.Collator("en", { sensitivity: "base" });
+
+/**
+ * Order abstracts by what the committee thought of them.
+ *
+ * `groupByTopic` preserves input order, so sorting the flat list before grouping
+ * is what makes the order hold *within* each topic — which is the only place it
+ * means anything, since comparing a cognitive abstract's 7.4 against a systems
+ * one's 7.6 is comparing two different panels' habits.
+ *
+ * **Unscored abstracts sort last in both directions.** "No score" is not a low
+ * score, and in "lowest first" they would otherwise fill the top of every topic
+ * and bury the abstract the committee actually rated worst. Ties break on title,
+ * so the order is stable across renders — this list re-renders after every
+ * action and rows must not shuffle under the cursor.
+ */
+export function sortByMeanScore(list, { reviewsById = new Map(), direction = "desc" } = {}) {
+  const sign = direction === "asc" ? 1 : -1;
+  const meanOf = (abstract) => reviewStats(reviewsById.get(abstract?.id)?.reviews).mean;
+  return [...(list ?? [])].sort((a, b) => {
+    const [ma, mb] = [meanOf(a), meanOf(b)];
+    if (ma === null && mb === null) return byTitle(a, b);
+    if (ma === null) return 1;
+    if (mb === null) return -1;
+    return sign * (ma - mb) || byTitle(a, b);
+  });
+}
+
+/** Alphabetical, the fallback order and the tie-break for every other one. */
+export function sortByTitle(list) {
+  return [...(list ?? [])].sort(byTitle);
+}
+
+const byTitle = (a, b) => collator.compare(String(a?.title ?? ""), String(b?.title ?? ""));
+
 /**
  * The whole committee's scores as a spreadsheet: one row per abstract, one
  * column per organizer, then the mean and how many scored it.
