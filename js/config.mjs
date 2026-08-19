@@ -85,6 +85,24 @@ export const HERO = {
   intervalMs: 7000,
 };
 
+// Photographs of previous editions, uploaded from the admin console.
+//
+// maxEdge matches HERO's so that a photograph imported from the home page and
+// one uploaded straight into an album are the same size on the page. maxPhotos
+// is the ceiling firestore.rules already puts on gallery/{year}.photos, repeated
+// here so the admin console can refuse the 201st before Firestore does.
+export const ARCHIVE = {
+  maxBytes: 5 * 1024 * 1024,
+  maxEdge: 1800,
+  types: ["image/png", "image/jpeg", "image/webp"],
+  maxPhotos: 200,
+  // Matches HERO.intervalMs: the two slideshows advance at the same pace, and
+  // one number that means "long enough to look at a photograph" is easier to
+  // retune than two. Unlike the hero's, this timer stops for good the moment a
+  // reader touches the controls -- see mountSlideshow().
+  intervalMs: 7000,
+};
+
 /**
  * Editable pages. `file` is the copy committed to the repo, which is both the
  * seed for a page that has never been edited on the site and the fallback when

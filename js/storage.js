@@ -7,9 +7,10 @@ import {
 // The shared instance, not a second getStorage(app): only that one has been
 // pointed at the emulator when a page asks for it.
 import { storage } from "./firebase.js";
-import { FIGURE, HERO } from "./config.mjs";
+import { ARCHIVE, FIGURE, HERO } from "./config.mjs";
 import { figurePath, outputType, targetSize } from "./figure-utils.mjs";
 import { heroPath } from "./hero-utils.mjs";
+import { archivePath } from "./album-utils.mjs";
 
 export { storage };
 
@@ -65,6 +66,22 @@ export async function uploadFigure(uid, abstractId, file) {
 export async function uploadHeroPhoto(uid, id, file) {
   const path = heroPath(uid, id);
   const blob = await downscale(file, HERO.maxEdge);
+  const objectRef = ref(storage, path);
+  await uploadBytes(objectRef, blob, { contentType: blob.type || outputType(file.type) });
+  return { url: await getDownloadURL(objectRef), path };
+}
+
+/**
+ * Upload one archive photograph. -> { url, path }.
+ *
+ * Same shape as uploadHeroPhoto, and deliberately a separate prefix rather than
+ * a shared one: js/album-utils.mjs ownsObject() reads the prefix to decide
+ * whether removing a photograph from an album may delete the object behind it,
+ * and an imported hero photograph must survive that.
+ */
+export async function uploadArchivePhoto(uid, id, file) {
+  const path = archivePath(uid, id);
+  const blob = await downscale(file, ARCHIVE.maxEdge);
   const objectRef = ref(storage, path);
   await uploadBytes(objectRef, blob, { contentType: blob.type || outputType(file.type) });
   return { url: await getDownloadURL(objectRef), path };

@@ -51,19 +51,3 @@ export function heroPath(uid, id) {
 export function heroPhotoId() {
   return crypto.randomUUID();
 }
-
-/**
- * Move the photo at `from` to `to`, returning a new list.
- *
- * The admin tab reorders with up/down buttons rather than drag-and-drop: the
- * list is at most twelve long, and a keyboard user gets the same affordance as
- * everybody else without a drag implementation.
- */
-export function movePhoto(photos, from, to) {
-  const list = [...(photos ?? [])];
-  if (!Number.isInteger(from) || from < 0 || from >= list.length) return list;
-  if (!Number.isInteger(to) || to < 0 || to >= list.length) return list;
-  const [moved] = list.splice(from, 1);
-  list.splice(to, 0, moved);
-  return list;
-}

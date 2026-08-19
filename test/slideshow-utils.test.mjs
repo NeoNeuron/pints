@@ -21,7 +21,8 @@ test("galleryYears puts the newest edition first", () => {
 
 test("galleryYears fills in the fields the slideshow reads", () => {
   const [newest] = galleryYears(docs);
-  assert.deepEqual(newest.photos[0], { name: "1.jpg", url: "https://x/1.jpg", caption: "" });
+  assert.deepEqual(newest.photos[0],
+    { name: "1.jpg", url: "https://x/1.jpg", caption: "", path: "" });
   assert.equal(newest.photos[1].caption, "Posters");
 });
 

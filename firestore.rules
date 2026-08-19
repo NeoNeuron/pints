@@ -250,13 +250,20 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
-    // Photographs of previous editions, listed from a Dropbox folder by the
-    // syncDropboxGallery callable and cached here so the public page reads
-    // Firestore rather than calling a function on every visit.
+    // Photographs of previous editions, uploaded from the admin console or
+    // listed from a Dropbox folder by the syncDropboxGallery callable, and
+    // cached here so the public page reads Firestore rather than calling a
+    // function on every visit.
     //
     // World-readable, because the archive page works signed out. Admin write
-    // only, and the shape is checked: the sync writes this, but so does the
-    // caption editor, and a public page renders whatever ends up here.
+    // only, and the shape is checked: several things write this, and a public
+    // page renders whatever ends up here.
+    //
+    // Only the TOP-LEVEL keys are checked. Photo entries carry name, url,
+    // caption and — since they can be uploaded rather than synced — `path`, the
+    // Storage object behind them, which js/album-utils.mjs ownsObject() reads to
+    // decide whether removing one may delete it. Tightening this into a
+    // per-entry hasOnly() without listing `path` would silently strip that.
     match /gallery/{year} {
       allow read: if true;
       allow write: if isAdmin()

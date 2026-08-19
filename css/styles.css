@@ -86,6 +86,7 @@ a { color: var(--accent); }
      all under reduced motion: if the slider is ever advanced some other way,
      the photographs still cut rather than slide. */
   .hero-slide { transition: none !important; }
+  .album-thumbs img { transition: none; }
 }
 
 main { padding-block: 2rem 1rem; }
@@ -441,6 +442,47 @@ sup { font-size: .7em; }
 .slideshow figcaption { max-width: none; text-align: center; }
 .slide-nav { display: flex; align-items: center; justify-content: center; gap: 1rem; margin-top: .75rem; }
 .slide-nav button { min-width: 3rem; font-size: 1.25rem; line-height: 1; padding: .35rem 1rem; }
+
+/* An album mounted under the edition it belongs to.
+   .prose caps its children at the reading measure (--measure, 68ch) so lines
+   stay readable, and a photograph squeezed to text width is a waste of it. But
+   `max-width: none` alone buys nothing — the cap is on .prose itself, and no
+   child can be wider than its parent — so the album is given an explicit width
+   and overflows to the right, landing on the wrap's content edge because .prose
+   starts on its left one.
+   Only once the wrap has stopped growing: at 62rem and up its content box is
+   exactly 62rem - 2.5rem, a fixed number with no vw in it. A vw-based bleed
+   would read the scrollbar's width as page width on the browsers that still
+   have one, and overflow the page by it at exactly the narrow sizes where
+   there was nothing to gain. */
+.prose > .archive-album { margin: 1.25rem 0 2rem; }
+@media (min-width: 62rem) {
+  .prose > .archive-album { width: calc(62rem - 2.5rem); max-width: none; }
+}
+
+/* Thumbnail strip. It scrolls sideways rather than wrapping onto rows, because
+   an album of forty photographs would otherwise push the next edition's copy
+   off the bottom of the screen. `position: relative` is load-bearing:
+   revealThumb() in js/slideshow.js reads offsetLeft, which is measured against
+   the nearest positioned ancestor and has to be the strip. */
+.album-thumbs {
+  position: relative; display: flex; gap: .5rem; margin-top: .75rem;
+  padding-bottom: .35rem; overflow-x: auto; overscroll-behavior-x: contain;
+  scrollbar-width: thin;
+}
+.album-thumb { flex: 0 0 auto; padding: 0; border: 0; background: none; line-height: 0; cursor: pointer; }
+.album-thumb:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: var(--radius); }
+/* Overrides .slideshow img above, which centres the stage photograph and lets it
+   grow to 30rem tall — neither of which a thumbnail wants. */
+.album-thumbs img {
+  width: 5.5rem; height: 3.75rem; margin: 0; max-height: none;
+  object-fit: cover; border: 1px solid var(--line); border-radius: var(--radius);
+  opacity: .6; transition: opacity .15s ease;
+}
+.album-thumb:hover img, .album-thumb:focus-visible img { opacity: 1; }
+/* Faded until it is the one on the stage. Both the outline and the full opacity
+   carry it, so it is not colour alone that says which photograph you are on. */
+.album-thumb[aria-current] img { opacity: 1; border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent); }
 
 /* Admin archive tab: a thumbnail with its caption under it. */
 .archive-admin { display: flex; flex-wrap: wrap; gap: 1rem; margin-top: 1rem; }

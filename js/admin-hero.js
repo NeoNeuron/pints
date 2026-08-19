@@ -1,6 +1,7 @@
-import { getHeroPhotos, saveHeroPhotos } from "./db.js";
+import { getHeroPhotos, listGallery, saveHeroPhotos } from "./db.js";
 import { deleteFigure, uploadHeroPhoto } from "./storage.js";
-import { heroPhotoId, heroPhotos, movePhoto } from "./hero-utils.mjs";
+import { heroPhotoId, heroPhotos } from "./hero-utils.mjs";
+import { movePhoto } from "./album-utils.mjs";
 import { validateFigure } from "./figure-utils.mjs";
 import { confirmChoice } from "./confirm-dialog.js";
 import { HERO } from "./config.mjs";
@@ -209,9 +210,20 @@ export async function mountHeroTab(host, { adminUid }) {
         path, url, alt: (alt ?? "").trim(),
       })), adminUid);
 
+      // An imported photograph is one Storage object on two lists. Deleting it
+      // here because it left the hero would blank it on the Archive page, where
+      // it is the point rather than a tint -- so ask the albums first. One extra
+      // read, and only when something was actually removed.
+      const referenced = orphaned.size
+        ? new Set((await listGallery())
+          .flatMap((entry) => (entry.photos ?? []).map((photo) => photo.path))
+          .filter(Boolean))
+        : new Set();
+
       // Only once the list is safely stored: until this write lands, a deleted
       // object is still the one the live home page is pointing at.
       for (const path of orphaned) {
+        if (referenced.has(path)) continue;
         try {
           await deleteFigure(path);
         } catch (err) {

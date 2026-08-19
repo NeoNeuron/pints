@@ -910,6 +910,60 @@ the empty case has to be invisible by construction, not by a calculation that
 happens to come out to zero.** Neither bug was reachable through the tests —
 they are questions about compositing, and only a screenshot answers them.
 
+### 7.23 One photograph, two lists, and who is allowed to delete it
+
+The twelve photographs behind the home page hero are the same twelve that now
+open the PINTS 2025 album on the Archive page. Importing them could have copied
+the objects; it shares them instead, because they are already downscaled and
+already in the bucket and a copy would put the same three megabytes in twice.
+
+Sharing turns a delete into a question about somebody else's page. Three answers
+were available:
+
+1. **Copy the bytes on import.** No coupling at all, at the cost of doubling the
+   storage and a browser round-trip per photograph — and `fetch`-ing a download
+   url back into a blob depends on a bucket CORS configuration nobody has set.
+2. **Make the album a live mirror of `config/hero`.** Nothing to import and never
+   out of step, but the album is then capped at `HERO.maxPhotos` and no
+   photograph can be in it without also being on the home page. That is the
+   opposite of what an archive is for.
+3. **Share the object and put ownership in its path.** Chosen.
+
+The path prefix *is* the permission. `ownsObject()` returns true only for
+`archive/`, so the Archive tab deletes what it uploaded and leaves an imported
+`hero/` object and a path-less Dropbox entry alone. That covers one direction
+completely and for free.
+
+The other direction is not free, and is the part worth remembering: removing a
+photograph from the **hero** already deleted its object on Save, which would have
+blanked it on the Archive page — where it is the point rather than a tint. So
+`js/admin-hero.js` now reads the albums before deleting and skips anything one
+still references. One extra read, and only when something was actually removed.
+
+The general shape: when two features share a resource, the cheap half of the
+coupling is the one you can encode in a name, and the expensive half is the one
+that needs a lookup. Doing only the cheap half looks symmetric and is not.
+
+### 7.24 The album had no handle to hang on, so it reads the heading
+
+The albums had to land under the right edition inside copy an organizer can
+rewrite from the Pages tab. The obvious mechanism — a marker typed into the
+markdown — turned out to be unavailable: `PAGE_ALLOWLIST` permits `class` but not
+`id`, so the only marker possible is a class name, and a class name somebody has
+to remember and spell correctly is one that will eventually be neither.
+
+So the anchor is the content itself. `yearInHeading()` pulls the first four-digit
+year out of each `<h2>`, and the album is inserted at the end of that section.
+"PINTS 2025" works; so does "The 2025 meeting", which matters because that copy
+is editable and nobody editing it will be thinking about this.
+
+The failure mode was chosen deliberately. A heading with no year in it does not
+lose its album — the album falls back to the section at the foot of the page,
+which is exactly where every album lived before this change. Degrading to the
+previous design is a better failure than degrading to nothing, and it is the same
+posture the rest of the page takes: no gallery documents, or an unreachable
+Firestore, and the Archive page is the page it was.
+
 ## 8. Open items
 
 - **Restrict the web API key** and enable App Check (§3.4). Free, console-only.

@@ -61,3 +61,18 @@ test("a year with no photos yet is allowed — that is what a failed sync leaves
   await assertSucceeds(setDoc(doc(asUser(env, "olivia"), "gallery", "2025"),
     gallery({ photos: [] })));
 });
+
+// Photo entries carry `path` for anything uploaded rather than synced from
+// Dropbox. Nothing in the rule mentions it today, which is the point: this test
+// fails loudly here if someone adds a per-entry hasOnly() that leaves it out,
+// rather than silently in the admin console.
+test("a photo entry may carry the Storage object behind it", async () => {
+  await seedAdmin(env, "olivia");
+  await assertSucceeds(setDoc(doc(asUser(env, "olivia"), "gallery", "2025"), gallery({
+    folderUrl: "",
+    photos: [
+      { name: "abc", url: "https://x/abc.jpg", caption: "", path: "archive/olivia/abc" },
+      { name: "def", url: "https://x/def.jpg", caption: "", path: "hero/olivia/def" },
+    ],
+  })));
+});

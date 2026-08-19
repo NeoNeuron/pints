@@ -1,12 +1,13 @@
 rules_version = '2';
 
-// Two things live in the bucket: figures attached to abstracts, and the
-// photographs behind the home page hero.
+// Three things live in the bucket: figures attached to abstracts, the
+// photographs behind the home page hero, and the archive albums.
 //
 // Storage rules cannot read Firestore, so ownership has to be encoded in the
 // object path — hence abstract_figures/{uid}/{abstractId}, not a flat namespace
-// keyed by abstract id alone. js/figure-utils.mjs figurePath() and
-// js/hero-utils.mjs heroPath() are the single places that build them.
+// keyed by abstract id alone. js/figure-utils.mjs figurePath(),
+// js/hero-utils.mjs heroPath() and js/album-utils.mjs archivePath() are the
+// single places that build them.
 
 service firebase.storage {
   match /b/{bucket}/o {
@@ -41,6 +42,32 @@ service firebase.storage {
 
       // Same ceiling as a figure. The client downscales to HERO.maxEdge first,
       // so a real upload lands far under it.
+      allow write: if request.auth != null
+        && request.auth.uid == uid
+        && request.resource.size < 5 * 1024 * 1024
+        && request.resource.contentType.matches('image/(png|jpeg|webp)');
+
+      allow delete: if request.auth != null && request.auth.uid == uid;
+    }
+
+    // Photographs in the archive albums, uploaded from the admin console.
+    //
+    // A separate prefix from hero/ rather than a shared one, and the prefix is
+    // the delete permission: js/album-utils.mjs ownsObject() only lets the
+    // Archive tab delete what it uploaded itself. A photograph imported from the
+    // home page keeps its hero/ path and stays on both lists as one object, so
+    // removing it from an album must not take it off the home page.
+    //
+    // Same reasoning as hero/ on why the uid is the only check available here:
+    // these rules cannot ask whether the uploader is an organizer, and putting
+    // a photograph on the public Archive page needs a write to gallery/{year},
+    // which firestore.rules gates on isAdmin().
+    match /archive/{uid}/{fileName} {
+      // The Archive page is public, so its photographs are.
+      allow read: if true;
+
+      // Same ceiling as a figure. The client downscales to ARCHIVE.maxEdge
+      // first, so a real upload lands far under it.
       allow write: if request.auth != null
         && request.auth.uid == uid
         && request.resource.size < 5 * 1024 * 1024

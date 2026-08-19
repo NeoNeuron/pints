@@ -44,8 +44,9 @@ paid Firebase plan; the CSV export stands in for it.
 - **Settings** — set the meeting date, open/close the submission window, set the
   deadline, grant admin rights. No Firebase-console workarounds remain for
   day-to-day organizing.
-- **Archive** — a slideshow of photographs from previous editions, synced from a
-  Dropbox folder by an organizer. See "Photographs of previous editions".
+- **Archive** — one album per previous edition, uploaded straight from the admin
+  console or imported from the home page photographs, and shown under the heading
+  that names its year. See "Photographs of previous editions".
 - **Home photos** — the photographs that slide past behind the logo on the home
   page, uploaded straight from the admin console. See "Photographs behind the
   home page hero".
@@ -285,16 +286,77 @@ an empty note over a real one. Accept and reject no longer write notes at all.
 
 ## Photographs of previous editions
 
+The Archive page carries one album per edition: a slideshow with a thumbnail
+strip under it, fed from `gallery/{year}` in Firestore.
+
+**It advances on its own every `ARCHIVE.intervalMs` (7s), like the home page
+hero — until a reader touches it.** Pressing an arrow, a thumbnail or an arrow
+key stops the automatic advance for good: somebody paging through an album is
+looking at a particular photograph, and having it slide away seven seconds later
+is the carousel arguing with them. Hovering or tabbing into the album pauses it
+without ending it, so reading a caption is not interrupted. It never starts at
+all under `prefers-reduced-motion`, or for an album of one, and it stops while
+the tab is in the background. Those on-screen controls are also the pause
+mechanism WCAG 2.2.2 asks of anything that moves by itself for more than five
+seconds.
+
+**Each album sits under the heading that names its edition.** Nothing marks the
+spot in the page copy — the markdown sanitizer allows `class` but not `id`
+(`PAGE_ALLOWLIST` in `js/markdown-render-utils.mjs`), so there is no stable
+handle to type there, and a class name an organizer has to remember is one that
+will eventually be misspelt. Instead `yearInHeading()` reads the year out of each
+`<h2>`, so "PINTS 2025" and "The 2025 meeting" both find 2025. An album whose
+year appears in no heading falls back to a section at the foot of the page rather
+than vanishing.
+
+### Adding photographs
+
+In the admin console's **Archive** tab: type the year, press **Add photographs**,
+pick files. They are downscaled in the browser to `ARCHIVE.maxEdge` and uploaded
+to `archive/{uid}/{id}` in Firebase Storage, and the list is written immediately —
+objects already in the bucket that no list mentions are a leak. Captions, order
+and removal are edited per edition and applied with **Save**.
+
+**Import the home page photographs** copies the hero's list into the year in the
+field. It shares the Storage objects rather than copying them: the photographs
+behind the hero are already downscaled and already in the bucket. Pressing it
+twice adds nothing the second time — `importedFromHero()` matches on `path`, not
+on the download url, which carries a token that can be reissued for the same
+object.
+
+### Which object may be deleted, and by whom
+
+Each photo entry carries a `path`, and **the prefix is the delete permission**
+(`ownsObject()` in `js/album-utils.mjs`):
+
+| `path` | Uploaded by | Removing the entry deletes the object? |
+|---|---|---|
+| `archive/{uid}/{id}` | the Archive tab | yes |
+| `hero/{uid}/{id}` | the Home photos tab | **no** — the home page still points at it |
+| `""` | a Dropbox sync | no — not ours to delete |
+
+An imported photograph is one object on two lists, which is what makes the import
+free. It also means the coupling runs both ways, so `js/admin-hero.js` reads the
+albums before deleting anything on Save and skips any object one still
+references. Without that, removing a photograph from the hero would blank it on
+the Archive page, where it is the point rather than a tint.
+
+The thumbnail strip points at the same full-size objects as the stage — there is
+one size of each photograph in Storage. `loading="lazy"` and the album sitting
+below the fold keep that off the critical path, and a dozen photographs is fine.
+An album past thirty or so would want a smaller object generated at upload time.
+
+### Syncing from Dropbox instead
+
 > **The sync is not deployed.** Its callable was temporarily removed from
 > `functions/index.js` so the rest of the functions could ship — see "Editing and
 > deleting as an organizer" for why and how to restore it. Everything below is
 > accurate and the browser half is untouched; only the Sync button is inert, and
-> the Archive admin tab says so.
+> the Archive admin tab says so. Uploading is unaffected and is the ordinary path.
 
-The Archive page carries a slideshow, one photograph at a time, one edition at a
-time, fed from `gallery/{year}` in Firestore. An organizer pastes a Dropbox
-folder link in the admin console's **Archive** tab and presses **Sync from
-Dropbox**; captions are typed there and survive later syncs, matched by file name.
+For a year whose photographs already live in a Dropbox folder, an organizer
+pastes the folder link under **Sync a year from Dropbox instead** and presses
+**Sync from Dropbox**; captions survive later syncs, matched by file name.
 
 **A browser cannot list a Dropbox folder.** Every Dropbox listing endpoint needs
 an `Authorization` header, and a static site has nowhere safe to keep one — this
@@ -333,11 +395,11 @@ cached in Firestore, and visitors never call a function at all.
 before there were photographs if the gallery is empty, the function is not
 deployed, or Firestore is unreachable — the slideshow mounts nothing at all.
 
-Two limits worth knowing: at most 200 photographs a year (enforced in both the
-callable and `firestore.rules`), and Dropbox caps public-link bandwidth at
-20 GB/day on a Basic account. A conference gallery is nowhere near either, but if
-the Archive page ever draws real traffic, move the photographs to Firebase
-Storage.
+Two limits worth knowing: at most 200 photographs a year (`ARCHIVE.maxPhotos`,
+and enforced in `firestore.rules` and the callable too), and Dropbox caps
+public-link bandwidth at 20 GB/day on a Basic account. A conference gallery is
+nowhere near either — and photographs uploaded here go to Firebase Storage, which
+is where this note used to say they should end up.
 
 ## Photographs behind the home page hero
 

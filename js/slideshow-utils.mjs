@@ -24,6 +24,11 @@ export function galleryYears(docs) {
         name: String(photo.name ?? ""),
         url: photo.url,
         caption: String(photo.caption ?? ""),
+        // The Storage object behind the photograph, or "" for one synced from
+        // Dropbox. The public slideshow has no use for it; the admin console
+        // renders from this same shaping and needs it to know whether Remove
+        // may delete the object -- see ownsObject() in js/album-utils.mjs.
+        path: String(photo.path ?? ""),
       })),
     }))
     .filter((entry) => Number.isFinite(entry.year) && entry.photos.length > 0)
