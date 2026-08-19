@@ -1,9 +1,6 @@
 import {
-  applyActionCode,
   browserLocalPersistence,
   browserSessionPersistence,
-  checkActionCode,
-  confirmPasswordReset,
   createUserWithEmailAndPassword,
   onAuthStateChanged,
   sendEmailVerification,
@@ -11,7 +8,6 @@ import {
   setPersistence,
   signInWithEmailAndPassword,
   signOut,
-  verifyPasswordResetCode,
 } from "https://www.gstatic.com/firebasejs/12.16.0/firebase-auth.js";
 import { doc, getDoc } from "https://www.gstatic.com/firebasejs/12.16.0/firebase-firestore.js";
 import { auth, db, isConfigured } from "./firebase.js";
@@ -62,28 +58,6 @@ export async function signIn(email, password, remember) {
 
 export const signOutNow = () => signOut(auth);
 export const sendReset = (email) => sendPasswordResetEmail(auth, email);
-
-// ------------------------------------------- the other end of those two mails
-//
-// Firebase mails a one-time `oobCode` and a link to whichever page is set as the
-// action URL. That used to be a Google-hosted page; it is auth-action.html now,
-// so redeeming the code is this site's job. See "Verification emails and
-// institutional mail filters" in the README for why the URL moved.
-//
-// None of these need a signed-in user, and that is the point: the link is very
-// often opened on a phone where nobody is signed in.
-
-/** Redeem a verifyEmail or recoverEmail code. */
-export const applyCode = (code) => applyActionCode(auth, code);
-
-/** Inspect a code without spending it — used to name the address it belongs to. */
-export const inspectCode = (code) => checkActionCode(auth, code);
-
-/** Check a resetPassword code, resolving with the address it belongs to. */
-export const checkResetCode = (code) => verifyPasswordResetCode(auth, code);
-
-/** Spend a resetPassword code, setting the new password. */
-export const applyReset = (code, password) => confirmPasswordReset(auth, code, password);
 
 /**
  * Pull a fresh ID token so request.auth.token.email_verified reflects reality.
@@ -167,13 +141,6 @@ const MESSAGES = {
     "This site is not an authorized domain for the Firebase project. An organizer " +
     "needs to add it under Authentication → Settings → Authorized domains.",
   "auth/network-request-failed": "Network error. Check your connection and try again.",
-  // Firebase spends an oobCode on first use and returns the same code for
-  // "already used" as for "never existed", so this wording has to cover both
-  // without accusing somebody who simply clicked the link twice.
-  "auth/invalid-action-code":
-    "That link has already been used, or it is not valid any more. Ask for a new one below.",
-  "auth/expired-action-code":
-    "That link has expired. Ask for a new one below.",
   "auth/operation-not-allowed":
     "Email/password sign-in is not enabled for this Firebase project yet.",
 };

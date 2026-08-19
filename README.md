@@ -59,7 +59,7 @@ paid Firebase plan; the CSV export stands in for it.
   organizers" — **the mail needs two SMTP secrets set before `functions/` is
   deployed at all.**
 
-116 security-rules tests and 208 unit tests cover this.
+116 security-rules tests and 204 unit tests cover this.
 
 ### Deploying rules — order matters
 
@@ -763,7 +763,7 @@ first.
 npm install
 npm run vendor      # refresh vendor/ after upgrading marked or dompurify
 npm run serve       # http://127.0.0.1:4173
-npm test            # pure-function unit tests (208)
+npm test            # pure-function unit tests (204)
 npm run test:rules  # Firestore rules tests (116; needs Java)
 npm run emulators   # Firestore, Auth, Storage and Functions emulators
 ```
@@ -1003,143 +1003,71 @@ the cost of a third-party dependency, a new secret, and a new abuse surface: the
 link would have to be minted with `generateEmailVerificationLink()` in
 `functions/` and mailed from there. Not worth it while the native path works.
 
-#### The catch: action links move too
+#### The action links cannot be moved, and that is a hard stop
 
-Applying a custom domain rewrites **both** the `From` field **and the action
-links** ([Firebase's guide](https://firebase.google.com/docs/auth/email-custom-domain)).
-Those links used to point at a Google-hosted handler; they now point at
-`pints.fr`, which is GitHub Pages and knows nothing about Firebase's
-`/__/auth/action` path.
+The links in these emails still point at
+`pints-conference.firebaseapp.com/__/auth/action`, and **there is no way to
+change that on this project.** Do not spend an afternoon on it as we did.
 
-So this site serves the handler itself: **`auth-action.html`** plus
-`js/page-auth-action.js`, built on Firebase's
-[custom email action handlers](https://firebase.google.com/docs/auth/custom-email-handler).
-It redeems the one-time `oobCode` for all three modes Firebase can send —
-`verifyEmail`, `resetPassword` and `recoverEmail` — and it must keep handling all
-three: `sendReset()` is live, so password-reset links arrive there too and a
-handler that only knew `verifyEmail` would break them silently.
+Firebase documents a "custom email action handler": you host the page, set the
+template's **customize action URL**, done. The console rejects every value with
+*"an error occurs in updating the action URL"*. Going under the console to the
+Identity Platform admin API gives the real error, `EMAIL_TEMPLATE_UPDATE_NOT_ALLOWED`,
+and probing it maps the rule exactly:
 
-It works signed out, because the link is opened wherever the mail was read and
-that is very often a phone nobody is signed in on. When a user *is* present it
-calls `refreshVerification()`, for the stale-token reason documented on that
-function. The `continueUrl` Firebase echoes back is validated by
-`safeContinueUrl()` in `js/redirect-utils.mjs` — it arrives in a link anybody can
-write, so it gets the same same-origin treatment as `?next=`.
-
-This is a gain on its own: people used to land on a bare Google-branded page with
-no route back to the site.
-
-#### Setting it up
-
-**Order matters. The handler must be live before the domain is applied**, or
-every verification and every password reset 404s at once — the same
-deploy-the-dependency-first discipline the rules have.
-
-1. **Ship `auth-action.html`.** Confirm `https://pints.fr/auth-action.html`
-   returns 200.
-2. **Firebase console → Authentication → Templates**, edit a template, click
-   **customize domain**, enter `pints.fr`.
-3. **Add the DNS records at GoDaddy.** Read the exact values off the console —
-   the shape is:
-
-   | Type | Host | Value |
-   |---|---|---|
-   | TXT | `@` | `firebase=pints-conference` |
-   | TXT | `@` | `v=spf1 include:_spf.firebasemail.com ~all` |
-   | CNAME | `firebase1._domainkey` | `mail-pints-fr.<dkim1>._domainkey.firebasemail.com.` |
-   | CNAME | `firebase2._domainkey` | `mail-pints-fr.<dkim2>._domainkey.firebasemail.com.` |
-
-   None of these collide with GitHub Pages: TXT at `@` coexists with the A
-   records, and the `_domainkey` names are subdomains Pages does not use. Use
-   `@`, not the bare apex name — GoDaddy rejects the latter.
-
-   **Only one `v=spf1` TXT record is allowed per domain.** The zone had no TXT
-   records at all before this, so there was nothing to merge with; if that ever
-   changes, merge the values into the single record rather than adding a second.
-   A second silently breaks SPF for *all* mail from the domain.
-
-4. **Add a DMARC record**, which Firebase does not ask for and institutional
-   filters do check:
-
-   | Type | Host | Value |
-   |---|---|---|
-   | TXT | `_dmarc` | `v=DMARC1; p=none; rua=mailto:<an organizer>` |
-
-   `p=none` first: it publishes a policy and collects reports without risking
-   legitimate mail. Tighten to `p=quarantine` once the reports come back clean.
-
-5. **Wait for the green "Verification complete"** on the Templates tab. Up to 24
-   hours.
-6. **Set the sender name** to `PINTS Conference` and the **reply-to** to a real
-   organizer address. `pints.fr` publishes no MX record, so nothing receives mail
-   sent to `noreply@pints.fr`.
-7. **Leave the action URL alone.** See below — the site serves Firebase's
-   reserved path instead, and no console setting is needed.
-8. **Now** click **Apply Custom Domain**.
-
-Steps 2-8 are all reversible from the console in seconds: remove the custom
-domain and links revert to `firebaseapp.com`.
-
-#### The action URL cannot be changed at all — measured, not assumed
-
-The tidy version of this would be to point the template's **customize action URL**
-at a page on `pints.fr`. The console refuses with *"an error occurs in updating
-the action URL"*, and so does the underlying API, with a real code:
-`EMAIL_TEMPLATE_UPDATE_NOT_ALLOWED`.
-
-**It is not about the domain, and not about the path.** Every candidate was
-probed directly against
-`identitytoolkit.googleapis.com/admin/v2/projects/pints-conference/config`
-(`updateMask=notification.sendEmail.callbackUri`):
-
-| Candidate `callbackUri` | Result |
+| Candidate `callbackUri` | |
 |---|---|
-| `pints-conference.firebaseapp.com/__/auth/action` | allowed — a project default |
-| `pints-conference.web.app/__/auth/action` | allowed — a project default |
-| `pints-conference.web.app/action.html` | **blocked** |
-| `auth.pints.fr/__/auth/action` | **blocked** |
-| `auth.pints.fr/action.html` | **blocked** |
-| `pints-fr.github.io/__/auth/action` | **blocked** |
+| `https://pints-conference.firebaseapp.com/__/auth/action` | **ALLOWED** |
+| `https://pints-conference.web.app/__/auth/action` | **ALLOWED** |
+| `https://pints-conference.web.app/__/auth/action/` | BLOCKED — trailing slash |
+| `https://pints-conference.web.app/action.html` | BLOCKED — path |
+| `https://pints.fr/auth-action.html` | BLOCKED |
+| `https://auth.pints.fr/__/auth/action` | BLOCKED |
+| `https://pints-fr.github.io/__/auth/action` | BLOCKED |
 
-The only writes that succeed are no-ops onto the two URLs Firebase already
-permits. Two natural explanations are both wrong and were both tested:
+**The whole URL is whitelisted, not the domain and not the path.** Exactly two
+values are accepted: Firebase's own two default handler URLs. A trailing slash is
+enough to fail.
 
-- **"It must be an authorized domain."** `pints.fr` and `pints-fr.github.io` are
-  both in Authentication → Settings → Authorized domains. Both are refused.
-- **"It must be a Firebase Hosting domain the project owns."** `auth.pints.fr`
-  was set up as a Firebase Hosting custom domain, verified, and issued a
-  certificate (`CN=auth.pints.fr`, Google Trust Services). Still refused.
+Things that are *not* the explanation, each of which cost a probe:
 
-The field is simply not customizable on this project. The documented unlock is
-upgrading to **Firebase Authentication with Identity Platform**, which Google
-describes as having no downgrade path — a one-way change to the auth stack in
-exchange for a hostname in a link. Not taken.
+- **Authorized domains.** `pints.fr` and `pints-fr.github.io` were both on the
+  list and both refused. Adding `auth.pints.fr` to it changed nothing.
+- **Firebase Hosting ownership.** `auth.pints.fr` was set up as a real Hosting
+  custom domain, certificate and all, and was still refused.
+- **The custom email domain being half-verified.** `customDomainState` reads
+  `NOT_STARTED` with an epoch-zero timestamp while `useCustomDomain` is `true`.
+  It looks broken and is cosmetic: the delivered mail passes DKIM, SPF and DMARC.
+  Ignore that field.
 
-**So verification links point at `pints-conference.firebaseapp.com`, and that is
-fine.** The deliverability problem was the unauthenticated *sender*, and that is
-fixed: mail is DKIM-signed as `pints.fr` and passes DMARC. The link host is a
-much weaker signal, and people still return to `pints.fr/account.html` afterwards
-via `continueUrl`. Before spending time here again, re-read this table.
+So `submit.html` and `account.html` are where people land, via the `continueUrl`
+Firebase appends — set in `returnToAccount()` in `js/auth.js`. Verification works;
+it just goes through a Google-branded page first.
 
-#### `auth-action.html` is currently unreachable
-
-`auth-action.html`, `js/page-auth-action.js` and the `__/auth/action/` shim
-implement the whole custom handler — verify, reset, recover, expired codes, the
-lot — and are tested against the Auth emulator. **Nothing links to them.** They
-are kept because the moment the restriction above lifts, or the project is ever
-upgraded to Identity Platform, the entire flow turns on by changing one field.
-
-Do not delete them assuming they are dead code without reading the section above
-first, and do not assume a confirmation link goes through them today: it does
-not.
+Lifting this would need Firebase Authentication with Identity Platform (a
+**one-way** upgrade), or minting links in `functions/` with
+`generateEmailVerificationLink()` and mailing them ourselves — which means
+sending the mail ourselves, and losing the `pints.fr` DKIM signature that this
+whole section exists to obtain unless a transactional provider is set up first.
+Neither is worth it to move a hostname.
 
 #### The measurement
 
-**Register a throwaway account with an `@ens.psl.eu` address and confirm the mail
-reaches the inbox rather than quarantine.** Then check the raw headers for
-`dkim=pass header.d=pints.fr`, `spf=pass` and `dmarc=pass`. Re-run this before
-announcing that submissions are open, and record the result here either way —
-this is the test the 2026-07-29 entry above failed.
+**Measured 2026-08-19, after the custom domain was applied** — the headers on a
+delivered verification mail:
+
+```
+dkim=pass   header.i=@pints.fr  header.s=firebase2
+spf=pass    smtp.mailfrom=noreply@pints.fr
+dmarc=pass  header.from=pints.fr
+```
+
+Signed with our own key, `Return-Path` aligned, DMARC aligned. This is the test
+the 2026-07-29 entry above failed.
+
+**Re-run it from an `@ens.psl.eu` address before announcing that submissions are
+open**, and record the result here either way. Gmail accepting the mail proves
+the signing chain, not the institutional filters.
 
 **Also send a password reset and complete it end to end.** It is the regression
 most likely to be missed, because nothing about registering exercises it.

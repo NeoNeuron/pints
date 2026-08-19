@@ -512,11 +512,9 @@ obvious cause until you seed it. That is the *desired* behaviour in production
 
 ### 7.9 The listing gap got a scheduled sweep, not an auth-action page
 
-**Its conclusion was overtaken by §7.25 — but its cost estimate was not.** The
-site now does host `auth-action.html`, for a reason this section did not have,
-and it cost exactly what this section predicted. The scheduled sweep stays: the
-handler still cannot publish for somebody who is signed in nowhere, which is the
-gap the sweep exists to close.
+**This section was challenged and held.** §7.25 records an attempt to host the
+action page anyway, for a reason this section did not have, and the discovery
+that Firebase will not permit it on this project at all. The sweep stays.
 
 §7.2 hangs the public participant write on `account.html`, because the
 verification link already lands there and already forces a token refresh. That
@@ -970,127 +968,73 @@ previous design is a better failure than degrading to nothing, and it is the sam
 posture the rest of the page takes: no gallery documents, or an unreachable
 Firestore, and the Archive page is the page it was.
 
-### 7.25 We built the auth-action page §7.9 refused, because the reason changed
+### 7.25 The email action URL is whitelisted to two values, and we found out the slow way
 
-§7.9 weighed hosting Firebase's email action handler and said no: it takes over
-the handler for *every* auth email, so it would also have to implement password
-reset and email change correctly — more surface, and more to get wrong, for a
-benefit a five-minute sweep already delivered. That reasoning was right, and the
-sweep is still there.
+Sending as `pints.fr` worked: verification mail is DKIM-signed by our own key and
+passes SPF and DMARC (§ README). Moving the *link* in that mail to our domain did
+not, and cannot.
 
-What changed is that the page stopped being optional. Abstract submission needs a
-verified address, and Firebase's default sender
-(`noreply@pints-conference.firebaseapp.com`) is a domain PINTS cannot publish DNS
-for, so the mail carries no alignment an institutional filter trusts. Measured:
-Gmail accepted it, `@ens.psl.eu` quarantined it. The fix is to send as `pints.fr`,
-and applying a custom domain in Firebase rewrites **the action links as well as
-the From field**. `pints.fr` is GitHub Pages. There is no Firebase handler there.
+Firebase documents a custom email action handler — host a page, set the
+template's action URL, done. Every value is rejected. The console says *"an error
+occurs in updating the action URL"* and nothing else; the Identity Platform admin
+API underneath returns `EMAIL_TEMPLATE_UPDATE_NOT_ALLOWED`, which is at least a
+name. Probing it gives the rule: **exactly two URLs are accepted**, Firebase's own
+two default handlers, whole-string. `…/__/auth/action/` with a trailing slash is
+refused.
 
-So the choice was never "handler or sweep". It was "handler, or keep sending mail
-that the intended audience's mail servers eat".
+The route there is the part worth keeping, because it was inefficient in an
+avoidable way:
 
-Three things fall out of that:
+1. `pints.fr/auth-action.html` refused. Guessed Firebase Hosting validation, from
+   a third-party tutorial plus the fact that no Hosting site existed. **A guess
+   dressed as a diagnosis.**
+2. Built `__/auth/action/index.html` to serve Firebase's reserved path on
+   pints.fr instead — clever, and irrelevant, because applying a custom email
+   domain never moves the links. That was an unchecked assumption from a doc
+   summary reading "From field and action links"; the delivered mail disproved it
+   in one glance and nobody looked until the user did.
+3. Probed domains. `web.app` allowed, `pints.fr` and `pints-fr.github.io`
+   refused. Concluded "Firebase-owned domain". Reasonable, and wrong.
+4. Stood up `auth.pints.fr` as a real Hosting custom domain, DNS and certificate,
+   on the strength of that. Refused. Added it to authorized domains. Still
+   refused.
+5. Only then varied **one thing at a time** — same domain, different path — and
+   the rule fell out immediately.
 
-- **All three modes, not one.** §7.9 predicted this exact cost and it is real:
-  `sendReset()` is live, so password-reset links land on our page the moment the
-  domain is applied. A handler that only knew `verifyEmail` would break password
-  reset silently, for everyone, at the instant of a console click. `recoverEmail`
-  is there for the same reason — Firebase can send it and we do not get to decline.
-- **Ordering, not correctness, is the risk.** The page has to be deployed and
-  returning 200 *before* Apply Custom Domain is clicked. Nothing about the code
-  can protect against getting that backwards; only the runbook can, which is why
-  the README states it as an order rather than a list. It is the same shape as
-  the rules-before-code rule.
-- **The action URL turned out to be immovable, and the handler is unreachable.**
-  See §7.26. The paragraph below describes why the handler sits where it does; it
-  is still accurate, but nothing routes to it today.
+Step 5 was available at step 1 and would have cost one probe instead of four,
+plus a subdomain and a Hosting site that both had to be torn down again. The
+lesson is not "read the docs harder": the docs are wrong here, and the console
+error is useless. It is that when a black box refuses input, **change one
+variable per probe** — steps 3 and 4 each changed domain *and* path together,
+which is precisely why the domain looked like the cause twice.
 
-- **We had to take `/__/auth/action` after all.** The first version put the
-  handler at `auth-action.html` and planned to point the template's *customize
-  action URL* at it, specifically to avoid depending on `.nojekyll` continuing to
-  keep an underscore-prefixed directory publishable — a coupling between a Jekyll
-  implementation detail and whether anybody can reset their password.
+The second lesson is cheaper: `customDomainState: NOT_STARTED` alongside
+`useCustomDomain: true` looks like a smoking gun and is cosmetic. The delivered
+headers are the authority on whether mail is signed, not the config field.
 
-  That field will not accept it: **it is validated against Firebase Hosting, and
-  this project has none.** `pints-conference.web.app` returns "Site Not Found",
-  because the site is on GitHub Pages. The console answers *"an error occurs in
-  updating the action URL"* and says nothing about why. `pints.fr` was already an
-  authorized domain, which is the obvious suspect and the wrong one.
+Everything built along the way was deleted: `auth-action.html`,
+`js/page-auth-action.js`, the reserved-path shim, the `auth-host/` Hosting site,
+`safeContinueUrl()` and its tests. `js/auth.js` and `js/redirect-utils.mjs` are
+byte-identical to before. What survives is in the README, so the next person
+reads the table instead of rebuilding the ladder.
 
-  Standing up a Firebase Hosting site purely to satisfy that validation would add
-  a second host to the deployment story for no other benefit. So the action URL
-  stays at its default, the custom domain moves it onto `pints.fr`, and
-  `__/auth/action/index.html` — a five-line shim forwarding to
-  `auth-action.html` with the query intact — answers it.
+Two changes were kept because they are right independently:
 
-  The coupling we tried to avoid is therefore real and now load-bearing, which is
-  worth stating plainly rather than burying: **if `.nojekyll` is ever removed,
-  email verification and password reset both break, silently.** The handler still
-  lives in exactly one place; the shim only translates a path we do not control.
-
-The `continueUrl` Firebase echoes back gets `safeContinueUrl()` rather than being
-followed. It is the same threat as `?next=` — a value that arrives in a link a
-stranger can write and ends in a navigation — so it gets the same answer: resolve
-it, require the same origin, then hand the bare filename back to `safeNext()`. Two
-gates. The query string is carried into that second check rather than stripped
-first, so a URL that is suspicious *because* it has one gets refused instead of
-quietly cleaned up and followed.
-
-One thing improved for free. People used to land on a bare Google-branded
-confirmation page with no route back — the complaint already written into the
-comment on `returnToAccount()`. They now land on a PINTS page that tells them
-what just opened up and links to it.
-
-### 7.26 Four hypotheses about one error code, and the one that was right
-
-Moving the confirmation link onto `pints.fr` failed in the console with *"an
-error occurs in updating the action URL"*. The underlying API says
-`EMAIL_TEMPLATE_UPDATE_NOT_ALLOWED`, which is more honest and still not an
-explanation. Four readings were tested against the API directly rather than
-argued about:
-
-1. **"`pints.fr` is not an authorized domain."** It is. Reading
-   `identitytoolkit.googleapis.com/v1/projects?key=…` listed it. Wrong.
-2. **"The whole email config is read-only for this project."** Writing the
-   existing `callbackUri` back to itself succeeds. The field is writable; the
-   *value* is refused. Wrong.
-3. **"It must be a Firebase Hosting domain the project owns."** This one had real
-   evidence — `web.app` was accepted while `pints.fr` and `pints-fr.github.io`
-   were not — and it was wrong too. `auth.pints.fr` was stood up as a Hosting
-   custom domain, verified, and issued a certificate. Still refused.
-4. **The field accepts only the two URLs Firebase already ships**
-   (`<project>.firebaseapp.com/__/auth/action` and the `web.app` equivalent).
-   Every other domain and every other path is refused, including other paths on
-   the accepted domains. This one survives all the evidence.
-
-Worth keeping, beyond the conclusion:
-
-- **A generic console error deserves the API underneath it.** The console had
-  been retried several times on the theory that it was flaky. It was faithfully
-  reporting a refusal it had no words for. One `curl` produced a real error code
-  and turned the question from "why is this UI broken" into "what does the server
-  actually allow" — which is answerable.
-- **Hypothesis 3 is why the probe mattered.** It fit every observation available
-  at the time and was still false. Building `auth.pints.fr` on it cost a
-  subdomain, a Hosting site, and a certificate wait, and none of that was
-  necessary. The cheap version — probing the grid of domain × path *before*
-  provisioning anything — was available from the start.
-- **The chase was worth less than it looked.** The deliverability fix was the
-  sender, and that landed early: `noreply@pints.fr`, DKIM-signed, DMARC passing.
-  Everything after was the link hostname, a much weaker filter signal. The
-  correct stopping point was earlier than where the stopping actually happened.
-
-The handler stays in the tree, unreachable, because the moment this restriction
-lifts or the project is upgraded to Identity Platform it works by changing one
-field. The README says so where somebody deleting apparent dead code will look.
+- The unverified panels on `account.html` and `submit.html` no longer name
+  `firebaseapp.com` as the sender. They would now be actively wrong — the sender
+  is `noreply@pints.fr` — and copy pinned to a console setting is copy that goes
+  stale silently.
+- `functions/index.js` carries a comment that the contact mailer stays on Gmail
+  and must not move its `From` to `@pints.fr`. The new SPF record covers
+  Firebase's servers, not Gmail's, so that edit would fail DMARC outright.
 
 ## 8. Open items
 
 - **Restrict the web API key** and enable App Check (§3.4). Free, console-only.
 - **Verify email deliverability from an institutional address** after any sender
-  change. Gmail arriving proves the pipeline, not the filters. Since §7.25 the
-  test is specific: register from `@ens.psl.eu` and check the raw headers for
-  `dkim=pass header.d=pints.fr`, `spf=pass`, `dmarc=pass`.
+  change. Gmail arriving proves the pipeline, not the filters. Confirmed passing
+  from Gmail on 2026-08-19 (§7.25); **still untested from `@ens.psl.eu`**, which
+  is the address class that failed in the first place.
 - **Poster numbers can collide** under concurrent review: `nextPosterNumber()`
   suggests, nothing enforces. Safe for one organizer working sequentially; make
   `publishAbstract` a transaction if review is ever shared.
