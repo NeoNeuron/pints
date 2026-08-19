@@ -407,6 +407,15 @@ details > :not(summary) { padding: 0 1rem 1rem; }
 .panel { border: 1px solid var(--line); border-radius: var(--radius); margin: 1rem 0; background: var(--bg); }
 .panel > .panel-head { padding: .75rem 1rem; font-weight: 600; border-bottom: 1px solid var(--line); }
 .panel > .panel-body { padding: 0 1rem 1rem; }
+/* An archive year folds: its panel is a <details> and its head the <summary>.
+   Keyed on the element rather than the class, because .panel and .panel-head are
+   shared with the abstracts tab and the submit page, where both are plain divs
+   and neither should move. */
+details.panel > summary.panel-head { cursor: pointer; }
+details.panel > summary.panel-head:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+/* Closed, the head's rule would sit directly on top of the panel's own bottom
+   border and read as a doubled line. */
+details.panel:not([open]) > summary.panel-head { border-bottom: 0; }
 
 /* Confirmation modals (js/confirm-dialog.js). */
 dialog.confirm {

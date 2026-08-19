@@ -245,6 +245,18 @@ export async function mountArchiveTab(host, { adminUid }) {
 
   // ------------------------------------------------------------------ panels
 
+  /**
+   * Which editions are folded open.
+   *
+   * Kept out here because render() rebuilds every panel from scratch after each
+   * Save, sync, upload and removal -- without this, saving a caption would fold
+   * the album you are working on shut. Seeded once, with the newest edition, so
+   * a first visit opens on the album most likely to be wanted instead of on a
+   * wall of headings.
+   */
+  const openYears = new Set();
+  let seeded = false;
+
   /** One edition: its photographs, their captions, their order. */
   function yearPanel(entry) {
     // Local until Save, so reordering four photographs is one write, not four.
@@ -260,10 +272,19 @@ export async function mountArchiveTab(host, { adminUid }) {
      */
     const orphaned = new Set();
 
-    const panel = document.createElement("div");
+    // <details> rather than a button and a hidden class: it brings its own
+    // keyboard handling and its own open/closed state, and a closed panel
+    // collapses to just its summary -- so a long album folds out of the way
+    // without this file tracking a flag or toggling a class on anything.
+    const panel = document.createElement("details");
     panel.className = "panel";
+    panel.open = openYears.has(entry.year);
+    panel.addEventListener("toggle", () => {
+      if (panel.open) openYears.add(entry.year);
+      else openYears.delete(entry.year);
+    });
 
-    const head = document.createElement("div");
+    const head = document.createElement("summary");
     head.className = "panel-head";
 
     const body = document.createElement("div");
@@ -351,9 +372,25 @@ export async function mountArchiveTab(host, { adminUid }) {
       }
     });
 
+    /**
+     * Edits are local until Save, and a folded panel hides its Save button --
+     * so the summary has to say when there is something in there to lose.
+     */
+    let dirty = false;
+    const headText = () => `${entry.year} — ${photos.length} photo`
+      + `${photos.length === 1 ? "" : "s"}`
+      + (dirty ? " — unsaved changes" : "");
+
+    // Typing a caption must not redraw: that would rebuild the input under the
+    // cursor. Only the summary changes.
+    function touch() {
+      if (dirty) return;
+      dirty = true;
+      head.textContent = headText();
+    }
+
     function draw() {
-      head.textContent = `${entry.year} — ${photos.length} photo`
-        + `${photos.length === 1 ? "" : "s"}`;
+      head.textContent = headText();
       grid.replaceChildren();
 
       if (!photos.length) {
@@ -377,7 +414,10 @@ export async function mountArchiveTab(host, { adminUid }) {
         caption.value = photo.caption ?? "";
         caption.placeholder = photo.name;
         caption.setAttribute("aria-label", `Caption for ${photo.name}`);
-        caption.addEventListener("input", () => { photo.caption = caption.value; });
+        caption.addEventListener("input", () => {
+          photo.caption = caption.value;
+          touch();
+        });
 
         // Order is display order, so it is worth being able to change. Up and
         // down rather than drag-and-drop: it works with a keyboard without a
@@ -386,9 +426,9 @@ export async function mountArchiveTab(host, { adminUid }) {
         row.className = "actions";
         row.append(
           moveButton("↑", `Move photograph ${at + 1} earlier`, at === 0,
-            () => { photos = movePhoto(photos, at, at - 1); draw(); }),
+            () => { photos = movePhoto(photos, at, at - 1); dirty = true; draw(); }),
           moveButton("↓", `Move photograph ${at + 1} later`, at === photos.length - 1,
-            () => { photos = movePhoto(photos, at, at + 1); draw(); }),
+            () => { photos = movePhoto(photos, at, at + 1); dirty = true; draw(); }),
         );
 
         const drop = document.createElement("button");
@@ -400,6 +440,7 @@ export async function mountArchiveTab(host, { adminUid }) {
           // here would blank it there.
           if (ownsObject(photo.path)) orphaned.add(photo.path);
           photos = photos.filter((each) => each !== photo);
+          dirty = true;
           draw();
           say("Removed from the list. Press Save to apply it.", "warn");
         });
@@ -422,6 +463,11 @@ export async function mountArchiveTab(host, { adminUid }) {
     // Rendered from the same shaping the public page uses, so what an organizer
     // checks here is what a visitor sees — including which entries are dropped.
     const years = galleryYears(docs);
+
+    if (!seeded && years.length) {
+      openYears.add(years[0].year);
+      seeded = true;
+    }
 
     yearsEl.replaceChildren();
     for (const entry of years) {
