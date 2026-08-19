@@ -1065,9 +1065,100 @@ dmarc=pass  header.from=pints.fr
 Signed with our own key, `Return-Path` aligned, DMARC aligned. This is the test
 the 2026-07-29 entry above failed.
 
-**Re-run it from an `@ens.psl.eu` address before announcing that submissions are
-open**, and record the result here either way. Gmail accepting the mail proves
-the signing chain, not the institutional filters.
+Signing was necessary and is not sufficient. Same message, three recipients,
+measured the same day:
+
+| Recipient | Result |
+|---|---|
+| `@gmail.com` | Inbox |
+| `@outlook.com` | Junk |
+| `@cnrs.fr` | **Nothing.** Not the inbox, not the junk folder |
+
+Authentication is not the variable here — it passes for all three. Two different
+causes are left, and only one of them is ours to fix.
+
+**Resolved the same day.** Adding an MX record fixed the `@cnrs.fr` delivery; see
+below for why a *receiving* record was what made *sending* work. Outlook was not
+expected to change and is a separate cause.
+
+#### The domain cannot receive mail, and that breaks sending
+
+**Fixed 2026-08-19 — kept here because the reasoning is the useful part.**
+
+`pints.fr` published **no MX record**. RFC 5321 §5.1 then makes the A record the
+implicit MX, so anything trying to reach `pints.fr` by mail was aimed at GitHub
+Pages — where port 25 does not answer at all. It hangs rather than refusing,
+which is the worst of the three possible behaviours. Consequences:
+
+- Gateways that verify the envelope sender before accepting the message (a
+  *sender callout*) open that connection, wait, and then defer or reject.
+  `cnrs.fr` runs its own MX (`mx1`/`mx2.cnrs.fr`), and self-managed gateways are
+  exactly where this check still lives.
+- **Every bounce is undeliverable.** A rejection notice addressed to
+  `noreply@pints.fr` has nowhere to land, so "it never arrived" and "it was
+  refused and nobody told us" are indistinguishable from here.
+- "Sending domain has no MX" is a scored spam signal in its own right in several
+  commercial filters.
+
+Do **not** answer this with a null MX (`MX 0 .`, RFC 7505). That asserts the
+domain accepts no mail at all and turns a callout from a timeout into a
+guaranteed rejection.
+
+#### The mail leaves over SendGrid, not Google
+
+`_spf.firebasemail.com` expands to `include:sendgrid.net include:_spf.google.com`.
+Firebase's custom-domain mail is not sent from Google's own outbound ranges
+alone, and SendGrid's *shared* pools carry the weakest reputation at Microsoft
+specifically. That matches the result exactly: Outlook junked what Gmail
+inboxed. No configuration fixes this — only a dedicated IP or a different
+transactional provider would, and neither is worth it while the numbers are this
+small.
+
+#### We are getting no DMARC reports, which is why CNRS is a guess
+
+`_dmarc.pints.fr` publishes `rua=mailto:kai.chen@gmail.com`. A `rua` address
+*outside* the domain requires an authorization record at
+`pints.fr._report._dmarc.gmail.com`, which we cannot create on `gmail.com`, so
+most reporters send nothing at all. The CNRS failure therefore arrives with no
+evidence attached. Fixing this also needs an MX.
+
+`pints.fr` is not on the Spamhaus DBL — checked against a control vector to
+confirm the lookup itself worked. None of this is reputation damage to the
+domain; it is configuration.
+
+#### What to do, in order
+
+1. ~~**Add MX records**~~ **Done 2026-08-19.** ImprovMX free tier, `mx1`/`mx2.improvmx.com`
+   at priority 10/20. The alias that matters is **`noreply@pints.fr`** — that is
+   Firebase's envelope sender and therefore the exact address a callout probes. An
+   MX that rejects `noreply@` fixes nothing, so a catch-all is the robust setting.
+2. ~~**Repoint DMARC**~~ **Done.** `v=DMARC1; p=none; rua=mailto:dmarc@pints.fr`.
+   Aggregate reports now have somewhere to land, so the next failure arrives with
+   evidence instead of a shrug. Expect daily XML attachments; that is the point.
+3. **Still to do: Reply-To** on the template to a real organizer address, and
+   **Public-facing name** → `PINTS Conference`. The mail currently calls itself
+   "pints-conference", which reads like a test message to filters and to people.
+4. ~~**Re-test to `@cnrs.fr`**~~ **Done — delivery confirmed.** The MX record was
+   the whole fix. One variable at a time is what found it, which is the same
+   lesson as the action-URL section above.
+
+Outlook is still expected to junk it, and no configuration here will change that:
+that failure is SendGrid shared-IP reputation, not anything `pints.fr` publishes.
+
+The SPF include was **merged** into the existing record, not added as a second
+one — `v=spf1 include:_spf.firebasemail.com include:spf.improvmx.com ~all`. Two
+`v=spf1` records would break sending from the whole domain silently. The chain
+costs 5 of SPF's 10 permitted DNS lookups; going over is a `permerror` that fails
+everything, so count before adding a third include.
+
+**Port 25 is blocked on the ENS network**, so none of this can be probed by SMTP
+from a laptop on campus — Gmail's own MX is equally unreachable from there, which
+makes a blocked-port timeout look exactly like a broken MX. Test end to end
+instead: send a plain message to `noreply@pints.fr` and confirm it forwards.
+
+Until then, the panels on `submit.html` and `account.html` link to
+`contact.html` so somebody whose mail never arrives has a route that does not
+depend on mail arriving.
 
 **Also send a password reset and complete it end to end.** It is the regression
 most likely to be missed, because nothing about registering exercises it.

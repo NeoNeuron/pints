@@ -63,7 +63,19 @@ if (warnIfUnconfigured(msg)) {
         again.disabled = false;
       }
     });
-    banner.replaceChildren(explain, again);
+    // Measured 2026-08-19: a @cnrs.fr address received nothing at all. Resending
+    // cannot fix a gateway that drops the mail, so offer an exit that does not
+    // depend on email arriving. See the README.
+    const stuck = document.createElement("p");
+    stuck.className = "muted";
+    stuck.style.margin = ".5rem 0 0";
+    stuck.append("Still nothing after a few minutes? ");
+    const ask = document.createElement("a");
+    ask.href = "contact.html";
+    ask.textContent = "Tell the organizers";
+    stuck.append(ask, " and we will confirm your address by hand.");
+
+    banner.replaceChildren(explain, again, stuck);
   }
 
   const profile = await getProfile(user.uid);

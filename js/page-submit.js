@@ -145,6 +145,17 @@ function showVerifyGate(user) {
   where.textContent = "Check your spam or quarantine folder if it has not "
     + "arrived: some university mail servers hold it there.";
 
+  // Measured 2026-08-19: a @cnrs.fr address received nothing at all — not a
+  // quarantined copy, nothing. Resending cannot fix a gateway that drops the
+  // mail, so the panel needs an exit that does not depend on email arriving.
+  const stuck = document.createElement("p");
+  stuck.className = "muted";
+  stuck.append("Still nothing after a few minutes? ");
+  const ask = document.createElement("a");
+  ask.href = "contact.html";
+  ask.textContent = "Tell the organizers";
+  stuck.append(ask, " and we will confirm your address by hand.");
+
   const resend = document.createElement("button");
   resend.type = "button";
   resend.className = "secondary";
@@ -179,7 +190,7 @@ function showVerifyGate(user) {
   actions.className = "actions";
   actions.append(again, resend, resendMsg);
 
-  body.append(first, why, where, actions);
+  body.append(first, why, where, actions, stuck);
   gate.replaceChildren(head, body);
   gate.hidden = false;
 }
