@@ -57,7 +57,20 @@ export function mountLayout() {
     footer.className = "site-footer";
     const wrap = document.createElement("div");
     wrap.className = "wrap";
-    wrap.textContent = `${SITE_NAME} — ${SITE_TAGLINE}. Logo by majab.com.`;
+    // Contact lives here rather than in NAV on purpose. The header already
+    // carries seven items plus up to two auth links, and an eighth pushes the
+    // nav onto a second row on a phone — the same crowding that cost the brand
+    // its tagline. The home page hero carries a button, so the two places
+    // somebody looks for it are both covered. Moving it into the header is one
+    // entry in NAV if that turns out to be wrong; markActive() needs no change.
+    const contact = document.createElement("a");
+    contact.href = "contact.html";
+    contact.textContent = "Contact us";
+    wrap.append(
+      document.createTextNode(`${SITE_NAME} — ${SITE_TAGLINE}. Logo by majab.com. `),
+      contact,
+      document.createTextNode("."),
+    );
     footer.replaceChildren(wrap);
   }
 

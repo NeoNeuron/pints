@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Contact us — PINTS</title>
+<meta name="description" content="Write to the PINTS organizing committee about registration, abstracts, the program, or the venue.">
+<link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+<header id="site-header"></header>
+<main class="wrap">
+  <h1>Contact us</h1>
+  <p class="prose muted">Your message goes to every member of the
+    <a href="about.html">organizing committee</a>, and whoever picks it up will
+    reply to the address you give below. If your question is about your own
+    account or an abstract you have already submitted, mention which — it saves
+    a round trip.</p>
+
+  <div id="msg" class="msg" role="status" aria-live="polite"></div>
+
+  <form id="contact-form" novalidate>
+    <label for="name">Your name</label>
+    <input id="name" type="text" maxlength="80" autocomplete="name" required>
+
+    <label for="email">Your email
+      <span class="hint">Where we reply. Check it before you send.</span>
+    </label>
+    <input id="email" type="email" maxlength="200" autocomplete="email" required>
+
+    <label for="topic">What is this about?</label>
+    <select id="topic" required></select>
+
+    <label for="message">Message</label>
+    <textarea id="message" maxlength="4000" required></textarea>
+
+    <div class="actions">
+      <button id="send" type="submit">Send to the organizers</button>
+    </div>
+  </form>
+</main>
+<footer id="site-footer"></footer>
+<script type="module" src="js/page-contact.js"></script>
+</body>
+</html>

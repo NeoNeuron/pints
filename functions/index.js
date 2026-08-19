@@ -1,4 +1,5 @@
-// Admin-only destructive operations.
+// Work the browser cannot do: admin-only destructive operations, the
+// participant backfill, and the contact-form mailer.
 //
 // Everything else on this site is a static page talking straight to Firestore,
 // with firestore.rules as the only authorization boundary. Deletion cannot work
@@ -18,6 +19,9 @@
 // to bypass the rules, or hold a secret the browser must not? Ordinary reads and
 // writes belong in firestore.rules, or the site stops being a static site.
 //
+// mailContactMessage is here on the second justification: SMTP credentials.
+// A static page cannot hold a password that sends mail as the organizers.
+//
 // NOT here, for now: syncDropboxGallery, the archive photo sync. It is the one
 // function that needs the second justification — a Dropbox token — and it
 // cannot deploy until DROPBOX_APP_KEY, DROPBOX_APP_SECRET and
@@ -25,6 +29,13 @@
 // the whole `firebase deploy --only functions`, so it was taken out to let the
 // rest ship. Restore it with `git revert` of the commit that removed it, once
 // the secrets are set; the browser half is untouched and still waiting for it.
+//
+// THE SAME TRAP APPLIES TO mailContactMessage. It binds CONTACT_SMTP_USER and
+// CONTACT_SMTP_PASSWORD, so deploying this file before those two secrets exist
+// fails the whole deploy and takes the deletes and the backfill down with it.
+// Set them first — see "Contacting the organizers" in the README. The contact
+// page itself does not care: it writes to Firestore, which works whether or not
+// anything here is deployed, and only the mail waits on this.
 //
 // Because the Admin SDK ignores rules, EVERY function below must check the
 // caller itself. A callable's request.auth is set by the platform from a
@@ -35,8 +46,11 @@ import { getAuth } from "firebase-admin/auth";
 import { FieldValue, getFirestore } from "firebase-admin/firestore";
 import { getStorage } from "firebase-admin/storage";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
+import { onDocumentCreated } from "firebase-functions/v2/firestore";
 import { onSchedule } from "firebase-functions/v2/scheduler";
+import { defineSecret } from "firebase-functions/params";
 import { logger } from "firebase-functions";
+import nodemailer from "nodemailer";
 
 initializeApp();
 
@@ -223,5 +237,203 @@ export const backfillParticipants = onSchedule(
     // a test participant to see whether they appear.
     logger.debug("participant sweep", { listed: listed.size, scanned, published });
     if (published) logger.info("participants backfilled", { published });
+  },
+);
+
+// -------------------------------------------------------- the contact mailer
+
+const SMTP_USER = defineSecret("CONTACT_SMTP_USER");
+const SMTP_PASSWORD = defineSecret("CONTACT_SMTP_PASSWORD");
+
+// Copied from CONTACT_TOPIC_LABELS in js/config.mjs. functions/ is a separate
+// npm package and cannot import from the site — the same reason
+// backfillParticipants reads the edition out of config/site rather than
+// importing CURRENT_EDITION. An id with no entry here still sends; it just
+// appears in the subject line as itself.
+const TOPIC_LABELS = {
+  registration: "Registration",
+  abstracts: "Abstract submission",
+  program: "Program and schedule",
+  venue: "Venue and travel",
+  website: "A problem with the website",
+  other: "Something else",
+};
+
+// The most messages that may be MAILED in one hour, across all senders.
+//
+// contact_messages is the one collection an anonymous visitor may write, so a
+// script holding the public API key can fill it as fast as Firestore accepts
+// writes. firestore.rules bounds how big one message can be and can do nothing
+// about how many arrive — rules cannot count documents. This is that half:
+// past the cap the documents still land and are still readable, but the
+// organizers' inboxes stop. Twenty an hour is far above any real day for a
+// meeting this size and far below what makes an inbox unusable.
+const MAX_MAILED_PER_HOUR = 20;
+
+/**
+ * Every organizer's address, from the registry admin rights already live in.
+ *
+ * **Firebase Auth is the source, not the `email` field on the admins document.**
+ * That field is whatever somebody typed into the console when granting rights
+ * (see "Making someone an organizer"), so it can be stale, misspelt, or simply
+ * absent — and the cost of any of those is an organizer who silently never
+ * receives a contact message. Auth holds the address they actually sign in with,
+ * and it follows them if they change it. The recorded field stays as the
+ * fallback, for a document whose uid has no Auth account behind it any more.
+ *
+ * An organizer who resolves to no address at all is logged rather than ignored.
+ * The message still goes to everybody else — one unreachable organizer must not
+ * cost the other five their mail — but "why did I not get it?" has to be
+ * answerable from the logs, which the first version of this made impossible.
+ */
+async function organizerEmails() {
+  const snap = await db.collection("admins").get();
+  if (snap.empty) return [];
+
+  const usable = (value) =>
+    (typeof value === "string" && value.includes("@") ? value : null);
+
+  // One batched lookup rather than a round trip per organizer.
+  const authEmail = new Map();
+  try {
+    const { users } = await getAuth().getUsers(snap.docs.map((doc) => ({ uid: doc.id })));
+    for (const user of users) authEmail.set(user.uid, usable(user.email));
+  } catch (err) {
+    // Losing the authoritative source is worth a warning; losing the message is
+    // not, so this falls through to the recorded addresses.
+    logger.warn("could not read organizer addresses from Auth; using admins/*.email",
+      { message: err?.message });
+  }
+
+  const found = [];
+  const unreachable = [];
+  for (const doc of snap.docs) {
+    const email = authEmail.get(doc.id) ?? usable(doc.data()?.email);
+    if (email) found.push(email);
+    else unreachable.push(doc.id);
+  }
+  if (unreachable.length) {
+    logger.warn("organizers with no usable email address, skipped", { uids: unreachable });
+  }
+
+  // Deduplicated: two organizers sharing a team alias is ordinary, and Gmail
+  // would otherwise be handed the same recipient twice.
+  return [...new Set(found)];
+}
+
+/** Plain text, because this is a message to read and reply to, not a page. */
+function messageBody(data, id) {
+  const topic = TOPIC_LABELS[data.topic] ?? data.topic;
+  return [
+    `From:    ${data.name} <${data.email}>`,
+    `About:   ${topic}`,
+    data.authorUid
+      ? `Account: registered participant (uid ${data.authorUid})`
+      : "Account: not signed in when they wrote this",
+    "",
+    data.message,
+    "",
+    "--",
+    "Sent from the contact form at https://pints-fr.github.io/contact.html",
+    `Reply to this mail and it goes to ${data.email}, not to the website.`,
+    `Message id: ${id}`,
+  ].join("\n");
+}
+
+/**
+ * Mail a contact-form message to every organizer.
+ *
+ * A Firestore trigger rather than a callable, and that is the whole design.
+ * contact.html writes to contact_messages the way every other page on this site
+ * writes to Firestore, so the page works — validates, stores, confirms — with
+ * nothing in this file deployed at all. Mail is the layer on top. A callable
+ * would have made an undeployed function into a contact page that does nothing.
+ *
+ * It follows that a failure here must never be silent: the visitor has already
+ * been told their message is on its way. So the outcome is stamped back onto
+ * the document, and `deliveredAt` missing on a message is the signal that
+ * somebody has to be answered by hand.
+ */
+export const mailContactMessage = onDocumentCreated(
+  {
+    region: REGION,
+    document: "contact_messages/{id}",
+    secrets: [SMTP_USER, SMTP_PASSWORD],
+    // One attempt. A retry storm on a transient SMTP failure would mail the
+    // same message repeatedly, and the stored document plus the missing
+    // deliveredAt is a better safety net than an automatic redelivery nobody
+    // can see.
+    retry: false,
+  },
+  async (event) => {
+    const id = event.params.id;
+    const data = event.data?.data();
+    if (!data?.email) {
+      logger.error("contact message has no sender address", { id });
+      return;
+    }
+
+    const ref = db.doc(`contact_messages/${id}`);
+    const stamp = (fields) => ref.set(fields, { merge: true });
+
+    // Counted over the whole hour rather than per sender: an address on a
+    // contact form is unverified, so per-sender limiting is one edit to evade.
+    const hourAgo = new Date(Date.now() - 3600_000);
+    const recent = await db.collection("contact_messages")
+      .where("createdAt", ">", hourAgo)
+      .count().get();
+    if (recent.data().count > MAX_MAILED_PER_HOUR) {
+      logger.warn("contact mail rate limit hit; storing without sending", {
+        id, lastHour: recent.data().count, cap: MAX_MAILED_PER_HOUR,
+      });
+      await stamp({ deliveryError: "rate limit" });
+      return;
+    }
+
+    const to = await organizerEmails();
+    if (to.length === 0) {
+      // Not a crash: the site works before anybody has been made an organizer,
+      // and this is the state where a message arrives with nowhere to go.
+      logger.error("no organizer has an email address in admins/; message stored only",
+        { id });
+      await stamp({ deliveryError: "no recipients" });
+      return;
+    }
+
+    const transport = nodemailer.createTransport({
+      host: "smtp.gmail.com",
+      port: 465,
+      secure: true,
+      auth: { user: SMTP_USER.value(), pass: SMTP_PASSWORD.value() },
+    });
+
+    try {
+      await transport.sendMail({
+        from: { name: "PINTS website", address: SMTP_USER.value() },
+        to,
+        // The point of the whole feature: hitting reply answers the visitor
+        // rather than the mailbox the site sends from. `from` cannot be their
+        // address — mail claiming to be from a domain Google may not sign fails
+        // DMARC, which is the very problem this account exists to avoid.
+        //
+        // An object, not `"Name <addr>"`. A visitor who writes their name as
+        // "Dupont, Alice" turns that string into two addresses as far as a mail
+        // parser is concerned, and the reply goes nowhere. nodemailer quotes a
+        // name it is handed separately.
+        replyTo: { name: data.name, address: data.email },
+        subject: `[PINTS contact] ${TOPIC_LABELS[data.topic] ?? data.topic} — ${data.name}`,
+        text: messageBody(data, id),
+      });
+    } catch (err) {
+      logger.error("contact mail failed", { id, message: err?.message });
+      await stamp({ deliveryError: String(err?.message ?? err).slice(0, 500) });
+      return;
+    }
+
+    // The addresses, not just the count. "Three recipients" cannot answer the
+    // only question anybody asks of this log — "why did I not get it?" — and
+    // these are the organizers' own addresses in the organizers' own project.
+    logger.info("contact message mailed", { id, recipients: to.length, to });
+    await stamp({ deliveredAt: FieldValue.serverTimestamp() });
   },
 );

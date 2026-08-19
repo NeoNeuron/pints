@@ -277,6 +277,51 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
+    // Messages from contact.html, on their way to the organizers' inboxes via
+    // the mailContactMessage trigger in functions/.
+    //
+    // This is the only collection on the site an ANONYMOUS visitor may write,
+    // and that is the point: somebody who cannot register, or never received
+    // their confirmation mail, is exactly who needs to reach an organizer. So
+    // the shape check below is the whole defence and has to be airtight — an
+    // unbounded field here is an unbounded string in six people's inboxes.
+    //
+    // What it cannot do is rate-limit: rules cannot count documents or read the
+    // clock beyond request.time. The hourly cap lives in the trigger, which
+    // stops SENDING past a threshold while still storing what arrived. Rules
+    // bound the size of one message; the function bounds how many get through.
+    //
+    // The topic list is copied from CONTACT_TOPICS in js/config.mjs, which
+    // rules cannot import — the same hand-kept duplication validAbstract() and
+    // validHero() already carry. Adding a topic in one place and not the other
+    // shows up as a form that offers an option the database refuses.
+    //
+    // No update, and no delete for anyone but an organizer: a sender who could
+    // edit their message after the mail had gone would make the inbox copy and
+    // the stored copy disagree about what was said.
+    match /contact_messages/{id} {
+      allow read: if isAdmin();
+      allow create: if request.resource.data.keys()
+            .hasOnly(['name', 'email', 'topic', 'message', 'authorUid', 'createdAt'])
+        && request.resource.data.keys()
+            .hasAll(['name', 'email', 'topic', 'message', 'createdAt'])
+        && str(request.resource.data.name, 80)
+        && str(request.resource.data.email, 200)
+        && str(request.resource.data.message, 4000)
+        && request.resource.data.topic in ['registration', 'abstracts', 'program',
+                                           'venue', 'website', 'other']
+        // Pins the client to serverTimestamp(). Without it a message can be
+        // written with any date it likes, and the trigger's "created in the
+        // last hour" cap is trivially evaded by backdating.
+        && request.resource.data.createdAt == request.time
+        // Present only for a signed-in sender, and then only their own uid:
+        // it tells an organizer the message came from a registered participant,
+        // which is worthless if anyone can claim to be one.
+        && (!('authorUid' in request.resource.data)
+            || request.resource.data.authorUid == request.auth.uid);
+      allow update, delete: if isAdmin();
+    }
+
     // Anything not matched above is denied.
     match /{document=**} {
       allow read, write: if false;

@@ -18,12 +18,14 @@ export const NAV = [
 export const LIMITS = {
   displayName: 80,
   affiliation: 120,
+  email: 200,
   title: 200,
   body: 2500,
   authors: 20,
   affiliations: 10,
   figureCaption: 300,
   pageMarkdown: 20000,
+  contactMessage: 4000,
 };
 
 // The organizers' vocabulary, assigned when an abstract is accepted. Submitters
@@ -46,6 +48,22 @@ export const TOPIC_LABELS = {
   cognitive: "Cognitive",
   systems: "Systems",
   computational: "Computational",
+};
+
+// What a visitor is writing to the organizers about. The ids are stored and
+// also appear in firestore.rules, which cannot import this file — the same
+// hand-kept duplication ABSTRACT_TOPICS carries in validAbstract(). Changing
+// this list means changing that one too, or the write is refused.
+export const CONTACT_TOPICS = [
+  "registration", "abstracts", "program", "venue", "website", "other",
+];
+export const CONTACT_TOPIC_LABELS = {
+  registration: "Registration",
+  abstracts: "Abstract submission",
+  program: "Program and schedule",
+  venue: "Venue and travel",
+  website: "A problem with the website",
+  other: "Something else",
 };
 
 export const SCHEDULE_KINDS = ["keynote", "talk", "poster", "break", "lunch", "social", "other"];

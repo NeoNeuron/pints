@@ -53,6 +53,11 @@ paid Firebase plan; the CSV export stands in for it.
 - **Organizer edit and delete** — organizers can correct a participant's name or
   affiliation, edit any abstract at any status, and delete an abstract or a
   participant outright. See "Editing and deleting as an organizer".
+- **Contact** — `contact.html` takes a name, an address, a topic and a message
+  and mails it to every organizer, with Reply-To set to the sender. Reachable
+  from the home page hero and the footer of every page. See "Contacting the
+  organizers" — **the mail needs two SMTP secrets set before `functions/` is
+  deployed at all.**
 
 103 security-rules tests and 182 unit tests cover this.
 
@@ -498,6 +503,97 @@ AA over any real photograph, and sits just under it in the theoretical worst
 case. `.80` crosses 4.5:1 outright if that matters more than the last sliver of
 photo clarity behind the type; the band's edges are unaffected either way.
 
+## Contacting the organizers
+
+`contact.html` takes a name, an email address, a topic and a message, and mails
+it to **every organizer** — everyone with a document in `admins`, using the
+`email` field recorded there. Granting somebody admin rights in Settings adds
+them to the contact recipients; there is no second list to maintain, and no
+address appears in the page source for harvesters to collect.
+
+**Reply-To is the sender**, so answering is one click and the reply goes to the
+visitor rather than to the mailbox the site sends from. The subject is
+`[PINTS contact] Registration — Alice Dupont`.
+
+**It does not require an account.** Somebody who cannot register, or whose
+confirmation mail was quarantined, is exactly who most needs to reach an
+organizer. If they *are* signed in, the form prefills their name and address and
+the message records their uid, so a "my abstract will not save" mail arrives
+already saying who they are.
+
+The page is reachable from the hero on the home page and from the footer of
+every page. It is deliberately **not** in `NAV`: seven items plus the auth links
+already wrap onto a second row on a phone. Move it into the header by adding
+`{ href: "contact.html", label: "Contact" }` to `NAV` in `js/config.mjs` if that
+turns out to be the wrong call — nothing else has to change.
+
+### How a message gets out
+
+```
+contact.html  ──write──>  contact_messages/{id}  ──trigger──>  mailContactMessage  ──> every admins/*.email
+                            (firestore.rules)                   (functions/, SMTP)      Reply-To: the sender
+```
+
+The page writes straight to Firestore, exactly like every other page here. It is
+**not** a callable, and that is the whole point: a callable that is not deployed
+is a contact page that does nothing, whereas this records the message the moment
+the rules ship and treats mail as the layer on top. So the page keeps working —
+validating, storing, confirming — with nothing in `functions/` deployed at all.
+
+The consequence is that a delivery failure must not be silent, because the
+visitor has already been told the message is on its way. `mailContactMessage`
+stamps the outcome back onto the document: `deliveredAt` on success,
+`deliveryError` otherwise. **A message with neither is one nobody has answered.**
+Read them in the Firebase console under `contact_messages` — there is no Inbox
+tab in the admin console, and email is meant to be the channel.
+
+`contact_messages` is the one collection an anonymous visitor may write, so it
+is also the one new abuse surface. Two halves guard it, and neither can do the
+other's job:
+
+| Where | Guards |
+|---|---|
+| `firestore.rules` | the shape of one message — field allowlist, lengths, the topic vocabulary, `createdAt` pinned to the server clock, `authorUid` pinned to the caller's own uid |
+| `mailContactMessage` | how many get **mailed** — past `MAX_MAILED_PER_HOUR` (20) it stores and stops sending |
+
+Rules cannot count documents, which is why the cap lives in the function; the
+function cannot stop a write, which is why the shape check lives in the rules.
+Enabling **App Check** (see the web API key section) is the third layer and the
+one that would stop the writes themselves.
+
+### Setting up the mail
+
+**Do this before deploying `functions/` at all.** `mailContactMessage` binds two
+secrets, and a function whose secrets do not exist cannot be provisioned — which
+fails the whole `firebase deploy --only functions`, taking `deleteParticipant`,
+`deleteAbstractCompletely` and `backfillParticipants` down with it. This is the
+same trap that got the Dropbox sync removed.
+
+1. Generate a Gmail app password — <https://myaccount.google.com> → **Security**.
+   2-Step Verification must be on, then **App passwords** → one for Mail.
+2. Store both values as secrets, never in the repository:
+   ```bash
+   npx firebase functions:secrets:set CONTACT_SMTP_USER      # the Gmail address
+   npx firebase functions:secrets:set CONTACT_SMTP_PASSWORD  # the 16-char app password
+   npx firebase deploy --only functions
+   ```
+
+Gmail rather than the Firebase default sender for the reason the verification
+mail section records at length: mail sent through Gmail is DKIM-signed by Google
+and passes DMARC, and `noreply@pints-conference.firebaseapp.com` does not — which
+is what university filters quarantine. A consumer account sends about 500
+messages a day, which is ample. Revoke the app password from the Google account
+page if the organizer holding it changes.
+
+**Send one real message before announcing the page**, and confirm it arrives at
+every organizer, that **Reply** addresses the visitor, and that it is not
+quarantined. An `@ens.psl.eu` recipient is the test that matters.
+
+Until the secrets exist, the sensible thing is to ship the page without the
+mailer: everything except `functions/index.js` and its `nodemailer` dependency
+works on its own, and messages accumulate in `contact_messages` where an
+organizer can read them.
+
 ## Editing page content
 
 **The easy way: sign in as an organizer, open `admin.html` → Pages, pick a page,
@@ -581,13 +677,15 @@ uploader. Both need the Admin SDK, so `functions/` holds these callables:
 | `deleteAbstractCompletely` | removes the abstract, its published copy, its reviews, its figure |
 | `deleteParticipant` | all of the above for every abstract they own, plus their profile, their public listing, and their login |
 | `backfillParticipants` | every five minutes, publishes verified participants who never loaded `account.html` — see "Being listed without ever loading account.html" |
+| `mailContactMessage` | mails a contact-form message to every organizer — see "Contacting the organizers". **Binds two SMTP secrets: set them before deploying anything here** |
 | `syncDropboxGallery` | **temporarily removed** — see below |
 
-All three deployed ones are here because they must **bypass the rules**: the
-deletes act on somebody else's documents, and the backfill writes on behalf of a
-person who is signed in nowhere. The other reason something may live here is that
-it must **hold a secret the browser cannot** — which is `syncDropboxGallery`'s
-justification. Those are the only two reasons anything belongs in `functions/`.
+Three of them are here because they must **bypass the rules**: the deletes act on
+somebody else's documents, and the backfill writes on behalf of a person who is
+signed in nowhere. The other reason something may live here is that it must
+**hold a secret the browser cannot** — which is what `mailContactMessage` and
+`syncDropboxGallery` are doing. Those are the only two reasons anything belongs
+in `functions/`.
 
 **`syncDropboxGallery` is not in `functions/index.js` right now.** It binds three
 Dropbox secrets, and a function whose secrets do not exist cannot be provisioned
@@ -608,13 +706,17 @@ than the first line of defence.
 
 **The site works without them.** Every page loads and every other feature works
 if the functions are never deployed; the two delete buttons report that the
-service is missing when pressed, and the Archive page simply shows no
-photographs. Deploy them with:
+service is missing when pressed, the Archive page simply shows no photographs,
+and the contact page still validates, stores and confirms — only the mail waits.
+Deploy them with:
 
 ```bash
 cd functions && npm install
 npx firebase deploy --only functions
 ```
+
+**Set `CONTACT_SMTP_USER` and `CONTACT_SMTP_PASSWORD` first** — see "Setting up
+the mail". Without them that deploy fails outright and nothing here ships.
 
 They deploy to `europe-west1`, not the `us-central1` default, so participant
 names and email addresses stay in the EU. `js/functions.js` names the same

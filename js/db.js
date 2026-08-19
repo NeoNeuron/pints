@@ -1,4 +1,5 @@
 import {
+  addDoc,
   collection,
   deleteDoc,
   doc,
@@ -295,6 +296,39 @@ export async function listUsers() {
   const q = query(collection(db, "users"), where("edition", "==", CURRENT_EDITION));
   return (await getDocs(q)).docs.map(snapData);
 }
+
+// ------------------------------------------------------------------ contact
+
+/**
+ * A message from the contact page, on its way to every organizer's inbox.
+ *
+ * A plain Firestore write rather than a callable, deliberately. The mail is
+ * sent by the mailContactMessage trigger in functions/, and a callable would
+ * make the whole page inert whenever that function is not deployed — whereas
+ * this records the message the moment the rules ship, and mail is the layer on
+ * top. It is also the reason nothing here reports "sent": the write is the
+ * promise this side of the site can actually keep.
+ *
+ * Not edition-scoped. "When does registration open for next year?" is a
+ * question about the site, not about pints2026, and the created timestamp is
+ * the only ordering an inbox needs.
+ *
+ * `authorUid` is recorded only when somebody is signed in, and firestore.rules
+ * pins it to their own uid — it tells an organizer that the sender is a
+ * registered participant rather than a stranger, which changes how a "I never
+ * got my confirmation email" message is read.
+ */
+export const sendContactMessage = ({ name, email, topic, message, authorUid = null }) =>
+  addDoc(collection(db, "contact_messages"), {
+    name: name.trim(),
+    email: email.trim(),
+    topic,
+    message: message.trim(),
+    // Omitted rather than null when signed out: the rules allow the field only
+    // when it equals request.auth.uid, and null is not that.
+    ...(authorUid ? { authorUid } : {}),
+    createdAt: serverTimestamp(),
+  });
 
 // -------------------------------------------------------------------- pages
 
