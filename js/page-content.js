@@ -38,7 +38,12 @@ await hydrateMarkdownHosts();
 const heroHost = document.getElementById("hero-photos");
 if (heroHost) {
   try {
-    mountHeroSlider(heroHost, heroPhotos(await getHeroPhotos()));
+    // The Archive link is part of the photographs, not part of the band, so it
+    // hangs off the slider's own answer to "did any arrive?" rather than off a
+    // second look at the list.
+    if (mountHeroSlider(heroHost, heroPhotos(await getHeroPhotos()))) {
+      document.getElementById("hero-link")?.removeAttribute("hidden");
+    }
   } catch (err) {
     console.error("[pints] hero", err);
   }

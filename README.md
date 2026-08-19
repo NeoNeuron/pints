@@ -414,6 +414,36 @@ That is the default and the fallback: an empty list, a Firestore read that fails
 or a browser that cannot reach Storage all end at the same place. Nothing about
 the landing page depends on the photographs arriving.
 
+**The whole band is a link to `previous.html`**, where the same photographs are
+shown at full size with captions, and a small **More photographs in the Archive**
+chip in the bottom-right corner says so. Clicking anywhere that is not one of the
+three buttons follows it — the chip answers "is this clickable?", and the
+band-sized target means nobody has to hit the chip to act on the answer. It
+appears only when the slider actually mounted something, so a hero with no
+photographs is not clickable and carries no chip.
+
+Four things make that work, and all four are load-bearing:
+
+- `.hero .wrap` is `pointer-events: none`, with `a` and `button` inside it
+  switched back on. The wrap spans the full 62rem column across the middle of the
+  band, so without this it would swallow every click aimed at the photographs —
+  including the empty space either side of the logo, which is most of the column.
+- The link sits *before* `.wrap` in the markup. Both carry `z-index: 1`, so the
+  later one paints on top, which is what keeps the buttons above the link and
+  clickable.
+- The chip is a `span` inside the anchor, not a second anchor. Two links to the
+  same page would be two tab stops announcing the same destination; this way the
+  accessible name is the chip's own visible text and needs no `aria-label`.
+- The chip carries its own background, because the `.hero::after` veil fades out
+  at exactly the corner where it sits and would leave it over an uncontrolled
+  photograph at full strength. `.hero .wrap` gains bottom padding while the link
+  is present so the chip does not sit against the button row at mid widths.
+
+Hovering anywhere in the band rings its edges and lights the chip. Raising
+`--hero-photo-opacity` on hover was the obvious cue and the wrong one — see the
+matched-pair note below, and note the edges are where the veil has already faded
+to nothing.
+
 They are shown faded and tinted burgundy, so they read as part of the brand
 colour rather than as a photo banner — clear enough to make out the room, not so
 clear that they fight the logo. Wide shots of the room or the poster session

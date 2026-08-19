@@ -15,6 +15,22 @@
        this band is, and a screen reader gains nothing from hearing a
        photograph described behind it. -->
   <div class="hero-photos" id="hero-photos" aria-hidden="true"></div>
+  <!-- The whole band is the way to the Archive, where these photographs are the
+       point rather than a tint. Revealed by js/page-content.js only once the
+       slider has actually mounted something: on a hero with no photographs there
+       is nothing to see more of, and a plain burgundy band that navigates when
+       you click it is just a trap.
+
+       Before .wrap in the markup on purpose. Both carry z-index 1, so the later
+       one paints on top -- which is what keeps the three buttons above this and
+       clickable while everything around them falls through to it.
+
+       The chip inside it is a label, not a second link. Two anchors pointing at
+       the same page would be two tab stops and two announcements of the same
+       thing; this way the band is one target that happens to say what it does. -->
+  <a class="hero-link" id="hero-link" href="previous.html" hidden>
+    <span class="hero-credit">More photographs in the Archive<span aria-hidden="true"> →</span></span>
+  </a>
   <div class="wrap">
     <h1><img class="logo" src="assets/pints-2026-header.svg" width="522" height="107"
       alt="PINTS 2026 — Paris Île-de-France Neuroscience, Theory, and Systems. November 6th, 2026, Daniel Cohen Amphitheater, ENS, 48 Bd Jourdan, 75014 Paris"></h1>
