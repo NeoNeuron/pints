@@ -6,9 +6,16 @@
   --bg-soft: #f6f6f4;
   --accent: #7b1e3a;
   --accent-soft: #f3e6ea;
+  /* The hovered state of a button, both accent and err darkened about 20%.
+     Literal hex rather than a color-mix(), to match every other token here and
+     so the contrast figures below are a property of the file rather than of
+     whatever the browser computes: white text is 10.1:1 on --accent and 12.5:1
+     on --accent-dark, so hovering only ever improves legibility. */
+  --accent-dark: #62182e;
   --ok: #1c6b3f;
   --warn: #8a5a00;
   --err: #a01b1b;
+  --err-dark: #801616;
   --measure: 68ch;
   --radius: 6px;
 }
@@ -473,6 +480,85 @@ button.secondary, .button.secondary { background: transparent; color: var(--acce
 button.danger { background: var(--err); border-color: var(--err); }
 button[disabled] { opacity: .5; cursor: not-allowed; }
 .actions { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: 1.5rem; }
+
+/* Hover: the button rises and fills.
+ *
+ * Buttons were the one control on this site that did nothing under the cursor.
+ * The nav links (:hover above), the abstract rows, the archive thumbnails and
+ * the hero band all answer it, so this closes a gap rather than decorating the
+ * home page -- which is why it is one rule on `button, .button` and not four
+ * buttons in the hero.
+ *
+ * THREE BUTTONS OPT OUT, and all three are buttons only in the DOM sense:
+ *   .to-top        carries its own shadow and its own transition, and fades
+ *                  itself in from opacity: 0.
+ *   .album-thumb   is an image with a button wrapped round it. `background:
+ *                  none` is deliberate and .album-thumb:hover img already owns
+ *                  the hover there.
+ *   .tabs button   is deliberately chrome-less. A filled background would
+ *                  destroy the tab strip, and its selected state is a
+ *                  border-bottom-color that a border transition would blur.
+ *
+ * THE :where() INSIDE :not() IS LOAD-BEARING, not a stylistic choice. :not()
+ * takes the specificity of its most specific argument, so a bare
+ * :not(..., .tabs button) would inherit (0,1,1) and push this rule to (0,3,1)
+ * -- high enough to beat button.danger:hover below and swallow the red.
+ * :where() is always zero, which pins this at (0,2,0). That ties
+ * .button.secondary above, so THIS BLOCK MUST STAY BELOW IT: the tie is broken
+ * on source order, and moving it up silently loses the fill on every
+ * <a class="button secondary">.
+ *
+ * :not([disabled]) is the other load-bearing piece. button[disabled] sets
+ * opacity only, and :hover matches a disabled control even where events do not
+ * fire -- so without it the permanently disabled ones (the first photo's "move
+ * up" in the admin, "Edit submission" on an accepted abstract) would lift and
+ * fill under the cursor and promise something they will not do.
+ *
+ * The whole thing is behind (hover: hover) and (pointer: fine) because a touch
+ * browser applies :hover on tap and leaves it applied until the next tap
+ * somewhere else, which would leave the last button anybody touched lit up. */
+@media (hover: hover) and (pointer: fine) {
+  :is(button, .button):not(:where(.to-top, .album-thumb, .tabs button)) {
+    transition: transform .15s ease, box-shadow .15s ease,
+                background-color .15s ease, border-color .15s ease, color .15s ease;
+  }
+  :is(button, .button):not(:where([disabled], .to-top, .album-thumb, .tabs button)):hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 10px rgb(from var(--ink) r g b / .18);
+    /* Named for all three variants at once: a secondary fills from transparent,
+       a primary darkens, and .danger is corrected on the next rule. */
+    background: var(--accent-dark);
+    border-color: var(--accent-dark);
+    color: #fff;
+  }
+  /* (0,2,1), so it beats the (0,2,0) above. Without this a Delete button turns
+     burgundy on hover -- losing the one colour that says what it does at the
+     exact moment somebody is about to press it. */
+  button.danger:not([disabled]):hover {
+    background: var(--err-dark);
+    border-color: var(--err-dark);
+  }
+}
+
+/* A SECOND reduced-motion block, and it has to be here rather than in the one
+   near the top of this file. That block sits at the head of the stylesheet,
+   above the transition declared just now, and a media query grants no extra
+   specificity -- so an equally specific rule later in the source wins over it
+   regardless. Cancelling the movement from up there would look correct and do
+   nothing.
+
+   The fill stays. It is the affordance; only the travel is the motion. */
+@media (prefers-reduced-motion: reduce) {
+  :is(button, .button) { transition: none; }
+  :is(button, .button):hover { transform: none; }
+}
+
+/* Keyboard parity. Buttons had no focus style of their own and fell back to the
+   UA outline; now that the cursor gets an answer, the keyboard needs the same
+   one. Matches the outline .hero-link and .album-thumb already use.
+   :focus-visible rather than :focus, so the confirm dialog's buttons -- focused
+   programmatically the moment it opens -- do not ring after a mouse click. */
+:is(button, .button):focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
 
 /* Status messages */
 .msg { padding: .6rem .9rem; border-radius: var(--radius); margin: 1rem 0; border: 1px solid; }
