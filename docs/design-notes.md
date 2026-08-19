@@ -1001,12 +1001,28 @@ Three things fall out of that:
   can protect against getting that backwards; only the runbook can, which is why
   the README states it as an order rather than a list. It is the same shape as
   the rules-before-code rule.
-- **The action URL is `auth-action.html`, not `/__/auth/action`.** Firebase's
-  reserved path is available, and taking it would have made the site's mail
-  depend on `.nojekyll` continuing to exist to keep an underscore-prefixed
-  directory publishable — a coupling between a Jekyll implementation detail and
-  whether anybody can reset their password. A flat page at the root matches every
-  other page here and depends on nothing.
+- **We had to take `/__/auth/action` after all.** The first version put the
+  handler at `auth-action.html` and planned to point the template's *customize
+  action URL* at it, specifically to avoid depending on `.nojekyll` continuing to
+  keep an underscore-prefixed directory publishable — a coupling between a Jekyll
+  implementation detail and whether anybody can reset their password.
+
+  That field will not accept it: **it is validated against Firebase Hosting, and
+  this project has none.** `pints-conference.web.app` returns "Site Not Found",
+  because the site is on GitHub Pages. The console answers *"an error occurs in
+  updating the action URL"* and says nothing about why. `pints.fr` was already an
+  authorized domain, which is the obvious suspect and the wrong one.
+
+  Standing up a Firebase Hosting site purely to satisfy that validation would add
+  a second host to the deployment story for no other benefit. So the action URL
+  stays at its default, the custom domain moves it onto `pints.fr`, and
+  `__/auth/action/index.html` — a five-line shim forwarding to
+  `auth-action.html` with the query intact — answers it.
+
+  The coupling we tried to avoid is therefore real and now load-bearing, which is
+  worth stating plainly rather than burying: **if `.nojekyll` is ever removed,
+  email verification and password reset both break, silently.** The handler still
+  lives in exactly one place; the shim only translates a path we do not control.
 
 The `continueUrl` Firebase echoes back gets `safeContinueUrl()` rather than being
 followed. It is the same threat as `?next=` — a value that arrives in a link a

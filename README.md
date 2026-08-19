@@ -1073,14 +1073,42 @@ deploy-the-dependency-first discipline the rules have.
 6. **Set the sender name** to `PINTS Conference` and the **reply-to** to a real
    organizer address. `pints.fr` publishes no MX record, so nothing receives mail
    sent to `noreply@pints.fr`.
-7. **Set the action URL** to `https://pints.fr/auth-action.html`. This is
-   deliberately a flat page at the root rather than Firebase's reserved
-   `/__/auth/action`, so nothing depends on `.nojekyll` continuing to keep an
-   underscore-prefixed directory publishable.
+7. **Leave the action URL alone.** See below — the site serves Firebase's
+   reserved path instead, and no console setting is needed.
 8. **Now** click **Apply Custom Domain**.
 
 Steps 2-8 are all reversible from the console in seconds: remove the custom
 domain and links revert to `firebaseapp.com`.
+
+#### Why the "custom action URL" field is not used
+
+The tidy version of this would be to point the template's **customize action URL**
+at `https://pints.fr/auth-action.html`. That field rejects it — *"an error occurs
+in updating the action URL"* — because **it is validated against Firebase
+Hosting, and this project has no Hosting site.** `pints-conference.web.app`
+returns "Site Not Found"; the site is on GitHub Pages and there is no reason to
+stand up a second host just to satisfy a text box.
+
+`pints.fr` being in **Authentication → Settings → Authorized domains** is not
+sufficient and is not the problem — it is already listed.
+
+So the action URL stays at its default. Applying the custom domain moves the
+links onto `pints.fr` but leaves the path alone, and they arrive as:
+
+```
+https://pints.fr/__/auth/action?mode=verifyEmail&oobCode=…&continueUrl=…
+```
+
+On a Firebase Hosting site that path is served by Firebase itself. Here it is
+served by **`__/auth/action/index.html`**, a five-line shim that forwards to
+`/auth-action.html` with the query string intact. The handler exists in one
+place; the shim only translates the path.
+
+**`.nojekyll` in the repository root is load-bearing for this.** Without it
+GitHub Pages hands the site to Jekyll, which drops underscore-prefixed
+directories — taking email verification and password reset with them. It is
+already required for other reasons, but this is the one where its absence is
+silent and expensive.
 
 #### The measurement
 
