@@ -1080,35 +1080,58 @@ deploy-the-dependency-first discipline the rules have.
 Steps 2-8 are all reversible from the console in seconds: remove the custom
 domain and links revert to `firebaseapp.com`.
 
-#### Why the "custom action URL" field is not used
+#### The action URL cannot be changed at all — measured, not assumed
 
 The tidy version of this would be to point the template's **customize action URL**
-at `https://pints.fr/auth-action.html`. That field rejects it — *"an error occurs
-in updating the action URL"* — because **it is validated against Firebase
-Hosting, and this project has no Hosting site.** `pints-conference.web.app`
-returns "Site Not Found"; the site is on GitHub Pages and there is no reason to
-stand up a second host just to satisfy a text box.
+at a page on `pints.fr`. The console refuses with *"an error occurs in updating
+the action URL"*, and so does the underlying API, with a real code:
+`EMAIL_TEMPLATE_UPDATE_NOT_ALLOWED`.
 
-`pints.fr` being in **Authentication → Settings → Authorized domains** is not
-sufficient and is not the problem — it is already listed.
+**It is not about the domain, and not about the path.** Every candidate was
+probed directly against
+`identitytoolkit.googleapis.com/admin/v2/projects/pints-conference/config`
+(`updateMask=notification.sendEmail.callbackUri`):
 
-So the action URL stays at its default. Applying the custom domain moves the
-links onto `pints.fr` but leaves the path alone, and they arrive as:
+| Candidate `callbackUri` | Result |
+|---|---|
+| `pints-conference.firebaseapp.com/__/auth/action` | allowed — a project default |
+| `pints-conference.web.app/__/auth/action` | allowed — a project default |
+| `pints-conference.web.app/action.html` | **blocked** |
+| `auth.pints.fr/__/auth/action` | **blocked** |
+| `auth.pints.fr/action.html` | **blocked** |
+| `pints-fr.github.io/__/auth/action` | **blocked** |
 
-```
-https://pints.fr/__/auth/action?mode=verifyEmail&oobCode=…&continueUrl=…
-```
+The only writes that succeed are no-ops onto the two URLs Firebase already
+permits. Two natural explanations are both wrong and were both tested:
 
-On a Firebase Hosting site that path is served by Firebase itself. Here it is
-served by **`__/auth/action/index.html`**, a five-line shim that forwards to
-`/auth-action.html` with the query string intact. The handler exists in one
-place; the shim only translates the path.
+- **"It must be an authorized domain."** `pints.fr` and `pints-fr.github.io` are
+  both in Authentication → Settings → Authorized domains. Both are refused.
+- **"It must be a Firebase Hosting domain the project owns."** `auth.pints.fr`
+  was set up as a Firebase Hosting custom domain, verified, and issued a
+  certificate (`CN=auth.pints.fr`, Google Trust Services). Still refused.
 
-**`.nojekyll` in the repository root is load-bearing for this.** Without it
-GitHub Pages hands the site to Jekyll, which drops underscore-prefixed
-directories — taking email verification and password reset with them. It is
-already required for other reasons, but this is the one where its absence is
-silent and expensive.
+The field is simply not customizable on this project. The documented unlock is
+upgrading to **Firebase Authentication with Identity Platform**, which Google
+describes as having no downgrade path — a one-way change to the auth stack in
+exchange for a hostname in a link. Not taken.
+
+**So verification links point at `pints-conference.firebaseapp.com`, and that is
+fine.** The deliverability problem was the unauthenticated *sender*, and that is
+fixed: mail is DKIM-signed as `pints.fr` and passes DMARC. The link host is a
+much weaker signal, and people still return to `pints.fr/account.html` afterwards
+via `continueUrl`. Before spending time here again, re-read this table.
+
+#### `auth-action.html` is currently unreachable
+
+`auth-action.html`, `js/page-auth-action.js` and the `__/auth/action/` shim
+implement the whole custom handler — verify, reset, recover, expired codes, the
+lot — and are tested against the Auth emulator. **Nothing links to them.** They
+are kept because the moment the restriction above lifts, or the project is ever
+upgraded to Identity Platform, the entire flow turns on by changing one field.
+
+Do not delete them assuming they are dead code without reading the section above
+first, and do not assume a confirmation link goes through them today: it does
+not.
 
 #### The measurement
 

@@ -1001,6 +1001,10 @@ Three things fall out of that:
   can protect against getting that backwards; only the runbook can, which is why
   the README states it as an order rather than a list. It is the same shape as
   the rules-before-code rule.
+- **The action URL turned out to be immovable, and the handler is unreachable.**
+  See §7.26. The paragraph below describes why the handler sits where it does; it
+  is still accurate, but nothing routes to it today.
+
 - **We had to take `/__/auth/action` after all.** The first version put the
   handler at `auth-action.html` and planned to point the template's *customize
   action URL* at it, specifically to avoid depending on `.nojekyll` continuing to
@@ -1036,6 +1040,49 @@ One thing improved for free. People used to land on a bare Google-branded
 confirmation page with no route back — the complaint already written into the
 comment on `returnToAccount()`. They now land on a PINTS page that tells them
 what just opened up and links to it.
+
+### 7.26 Four hypotheses about one error code, and the one that was right
+
+Moving the confirmation link onto `pints.fr` failed in the console with *"an
+error occurs in updating the action URL"*. The underlying API says
+`EMAIL_TEMPLATE_UPDATE_NOT_ALLOWED`, which is more honest and still not an
+explanation. Four readings were tested against the API directly rather than
+argued about:
+
+1. **"`pints.fr` is not an authorized domain."** It is. Reading
+   `identitytoolkit.googleapis.com/v1/projects?key=…` listed it. Wrong.
+2. **"The whole email config is read-only for this project."** Writing the
+   existing `callbackUri` back to itself succeeds. The field is writable; the
+   *value* is refused. Wrong.
+3. **"It must be a Firebase Hosting domain the project owns."** This one had real
+   evidence — `web.app` was accepted while `pints.fr` and `pints-fr.github.io`
+   were not — and it was wrong too. `auth.pints.fr` was stood up as a Hosting
+   custom domain, verified, and issued a certificate. Still refused.
+4. **The field accepts only the two URLs Firebase already ships**
+   (`<project>.firebaseapp.com/__/auth/action` and the `web.app` equivalent).
+   Every other domain and every other path is refused, including other paths on
+   the accepted domains. This one survives all the evidence.
+
+Worth keeping, beyond the conclusion:
+
+- **A generic console error deserves the API underneath it.** The console had
+  been retried several times on the theory that it was flaky. It was faithfully
+  reporting a refusal it had no words for. One `curl` produced a real error code
+  and turned the question from "why is this UI broken" into "what does the server
+  actually allow" — which is answerable.
+- **Hypothesis 3 is why the probe mattered.** It fit every observation available
+  at the time and was still false. Building `auth.pints.fr` on it cost a
+  subdomain, a Hosting site, and a certificate wait, and none of that was
+  necessary. The cheap version — probing the grid of domain × path *before*
+  provisioning anything — was available from the start.
+- **The chase was worth less than it looked.** The deliverability fix was the
+  sender, and that landed early: `noreply@pints.fr`, DKIM-signed, DMARC passing.
+  Everything after was the link hostname, a much weaker filter signal. The
+  correct stopping point was earlier than where the stopping actually happened.
+
+The handler stays in the tree, unreachable, because the moment this restriction
+lifts or the project is upgraded to Identity Platform it works by changing one
+field. The README says so where somebody deleting apparent dead code will look.
 
 ## 8. Open items
 
