@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Confirming — PINTS</title>
+<meta name="robots" content="noindex">
+<!--
+  The email action URL, on the one host Firebase will accept.
+
+  Firebase refuses to store a callbackUri on a domain the project does not own
+  as a Hosting domain — pints.fr is GitHub Pages, so the API answers
+  EMAIL_TEMPLATE_UPDATE_NOT_ALLOWED and the console shows a generic error. This
+  file is served from auth.pints.fr, a Firebase Hosting domain that exists only
+  to satisfy that rule, and forwards to the real handler on pints.fr.
+
+  A SERVED PAGE, not a Hosting `redirects` rule. Firebase does not document
+  whether a redirect preserves the query string, and losing it here would drop
+  the oobCode and break every confirmation link with nothing in any log to say
+  why. The browser keeps location.search across a page load, so reading it here
+  cannot lose it.
+
+  Not /__/auth/action: that namespace is reserved by Firebase Hosting and served
+  before any file of ours, so a file there would never run.
+-->
+<script>
+  // replace(), not assign(): the one-time code must not sit in history where a
+  // Back press re-runs a request that can no longer succeed.
+  location.replace("https://pints.fr/auth-action.html" + location.search + location.hash);
+</script>
+</head>
+<body>
+<noscript><p>Open <a href="https://pints.fr/auth-action.html">this page</a> to finish confirming.</p></noscript>
+</body>
+</html>

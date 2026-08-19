@@ -33,5 +33,13 @@
         "*.local"
       ]
     }
-  ]
+  ],
+  "hosting": {
+    "public": "auth-host",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**"
+    ]
+  }
 }
