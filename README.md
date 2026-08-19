@@ -59,7 +59,7 @@ paid Firebase plan; the CSV export stands in for it.
   organizers" — **the mail needs two SMTP secrets set before `functions/` is
   deployed at all.**
 
-103 security-rules tests and 182 unit tests cover this.
+116 security-rules tests and 208 unit tests cover this.
 
 ### Deploying rules — order matters
 
@@ -200,8 +200,8 @@ else and the right fallback for a click that beats the rewrite, since
 `submit.html` redirects to exactly the same place.
 
 **Signed in but unconfirmed → confirm.** The form is not mounted at all. A panel
-says so, names the address, warns that the sender is a `firebaseapp.com` domain
-that university filters quarantine, and carries its own **resend** button and an
+says so, names the address, points at the spam or quarantine folder that
+university filters use, and carries its own **resend** button and an
 **I have confirmed it** button that reloads. The moment somebody discovers the
 mail never arrived is right there on the page they came to use, not on a later
 visit to `account.html`.
@@ -763,8 +763,8 @@ first.
 npm install
 npm run vendor      # refresh vendor/ after upgrading marked or dompurify
 npm run serve       # http://127.0.0.1:4173
-npm test            # pure-function unit tests (174)
-npm run test:rules  # Firestore rules tests (94; needs Java)
+npm test            # pure-function unit tests (208)
+npm run test:rules  # Firestore rules tests (116; needs Java)
 npm run emulators   # Firestore, Auth, Storage and Functions emulators
 ```
 
@@ -899,7 +899,7 @@ and it must not be hidden:
   whether it is public — and it would force a build step this project
   deliberately does not have.
 - **It does not grant access.** It identifies the project. Authorization is
-  `firestore.rules`, covered by 94 emulator tests and verified against
+  `firestore.rules`, covered by 116 emulator tests and verified against
   production: an anonymous caller holding this exact key gets
   `PERMISSION_DENIED` on `users`, `admins`, `abstracts`, and `abstract_reviews`,
   and can read only what is public by design.
@@ -961,14 +961,22 @@ rotating the key — rotation changes the string without changing what it can do
 Abstract submission requires a verified email address, enforced in
 `firestore.rules` via `request.auth.token.email_verified`.
 
-**Known problem.** Firebase sends from `noreply@pints-conference.firebaseapp.com`.
-That domain has no SPF/DKIM alignment an institutional mail server trusts, so
-university filters routinely quarantine it. Tested 2026-07-29: a Gmail address
-received the message and verified successfully; an `@ens.psl.eu` address did
-not. The Firebase pipeline itself is fine — this is recipient-side filtering,
-and it will vary institution by institution.
+**The problem.** Firebase's default sender is
+`noreply@pints-conference.firebaseapp.com` — a domain PINTS has no DNS control
+over, so the mail carries no SPF or DKIM that aligns with anything a recipient
+recognises. Measured 2026-07-29: a Gmail address received it and verified
+successfully; an `@ens.psl.eu` address did not. The Firebase pipeline is fine;
+this is recipient-side filtering, and for a meeting whose attendees are almost
+entirely on institutional mail it is the single biggest obstacle between a
+registrant and a submitted abstract.
 
-Two mitigations are already in place:
+**The fix: send as `pints.fr`.** Google keeps sending the mail, but signs it with
+DKIM keys published under `pints.fr` and an SPF record that authorises its
+servers, so it arrives aligned. Free, native, no third party, no new secret, and
+no Identity Platform upgrade.
+
+Two mitigations remain in place regardless, because no configuration makes every
+institutional filter cooperate:
 
 - The unverified banner on `account.html` and the panel that replaces the form on
   `submit.html` both name the cause, point at the spam or quarantine folder,
@@ -977,66 +985,113 @@ Two mitigations are already in place:
   admins `allow write: if isAdmin()` on abstracts. An organizer is never locked
   out of their own submission by undelivered mail.
 
-There are two real fixes. Both make the mail pass SPF/DKIM/DMARC, which is what
-institutional filters actually check.
+#### Why not GoDaddy's own mail, or an outside service
 
-#### Option A — send through a Gmail account (no domain needed)
+GoDaddy hosts the DNS for `pints.fr` and that is the whole of its role here.
+It is not a sending option:
 
-Mail genuinely originates from Gmail, DKIM-signed by Google for `gmail.com`, so
-it passes DMARC. This is the only legitimate way to have a `@gmail.com` sender:
-**you cannot simply set the From field to a Gmail address.** Firebase's
-custom-domain flow verifies ownership through DNS records, and nobody can add
-records to `gmail.com`. Claiming a Gmail From without sending through Gmail
-fails DMARC alignment and is treated *worse* than the current default.
+- `relay-hosting.secureserver.net` only accepts connections from sites on GoDaddy
+  hosting. This site is on GitHub Pages.
+- Professional Email / Microsoft 365 mailboxes (`smtpout.secureserver.net`) are
+  human mailboxes on shared sending reputation, capped around 250 relays a day,
+  and wiring one into Firebase needs the **custom SMTP** feature — which requires
+  the one-way upgrade to Firebase Authentication with Identity Platform.
 
-1. **Upgrade to Firebase Authentication with Identity Platform** —
-   Firebase console → **Authentication → Settings**. Custom SMTP is an Identity
-   Platform feature. On Spark this stays free but caps at **3,000 daily active
-   users**; a one-day meeting is nowhere near that. Google documents no
-   downgrade path, so treat the upgrade as one-way.
-2. **Generate a Gmail app password** — <https://myaccount.google.com> →
-   **Security**. 2-Step Verification must be on, then **App passwords** → create
-   one for Mail. It is a 16-character string.
-3. **Configure custom SMTP** — Firebase console → **Authentication → Templates**
-   (or Google Cloud console → Identity Platform → Settings → Email):
-   | Field | Value |
-   |---|---|
-   | Sender email | the Gmail address |
-   | Host | `smtp.gmail.com` |
-   | Port / security | `465` with SSL, or `587` with START_TLS |
-   | Username | the same Gmail address |
-   | Password | the app password from step 2 |
-4. Set **Sender display name** to `PINTS Conference`, and **Reply-to** to
-   whichever address should receive replies.
+A transactional provider (Resend, Postmark, Mailgun, SES) is the fallback if the
+measurement below ever stops passing. It buys real bounce and delivery logs, at
+the cost of a third-party dependency, a new secret, and a new abuse surface: the
+link would have to be minted with `generateEmailVerificationLink()` in
+`functions/` and mailed from there. Not worth it while the native path works.
 
-Caveats: a consumer Gmail account is limited to roughly **500 messages a day**,
-which is ample here. The app password grants permission to send mail as that
-account — paste it only into the Firebase console, never into the repository,
-and revoke it from the Google account page if the organizer changes.
+#### The catch: action links move too
 
-#### Option B — send from a domain PINTS controls
+Applying a custom domain rewrites **both** the `From` field **and the action
+links** ([Firebase's guide](https://firebase.google.com/docs/auth/email-custom-domain)).
+Those links used to point at a Google-hosted handler; they now point at
+`pints.fr`, which is GitHub Pages and knows nothing about Firebase's
+`/__/auth/action` path.
 
-Better long-term, and looks more official than a personal Gmail on the From
-line. Per [Firebase's custom-domain guide](https://firebase.google.com/docs/auth/email-custom-domain):
+So this site serves the handler itself: **`auth-action.html`** plus
+`js/page-auth-action.js`, built on Firebase's
+[custom email action handlers](https://firebase.google.com/docs/auth/custom-email-handler).
+It redeems the one-time `oobCode` for all three modes Firebase can send —
+`verifyEmail`, `resetPassword` and `recoverEmail` — and it must keep handling all
+three: `sendReset()` is live, so password-reset links arrive there too and a
+handler that only knew `verifyEmail` would break them silently.
 
-1. **Authentication → Templates**, click the edit icon on a template, then
-   **customize domain**.
-2. Enter the domain (e.g. `pints.example.org`).
-3. Add the **TXT** and **CNAME** records Firebase displays, at the registrar.
-   **Only one `v=spf1` TXT record is allowed per domain** — if the domain
-   already has one, merge the values into it rather than adding a second.
-   Adding a second silently breaks SPF for *all* mail from that domain.
-4. Wait for verification, up to 24 hours. The Templates page shows a green
-   "Verification complete".
-5. Click **Apply Custom Domain**.
+It works signed out, because the link is opened wherever the mail was read and
+that is very often a phone nobody is signed in on. When a user *is* present it
+calls `refreshVerification()`, for the stale-token reason documented on that
+function. The `continueUrl` Firebase echoes back is validated by
+`safeContinueUrl()` in `js/redirect-utils.mjs` — it arrives in a link anybody can
+write, so it gets the same same-origin treatment as `?next=`.
 
-Prerequisites: a domain PINTS owns, and someone able to edit its DNS. A
-freshly-registered domain also starts with no sender reputation, which some
-filters weigh.
+This is a gain on its own: people used to land on a bare Google-branded page with
+no route back to the site.
 
-**Whichever option you pick, re-run the deliverability test from an
-`@ens.psl.eu` address before announcing that submissions are open.** Neither
-option guarantees every institutional filter accepts the mail.
+#### Setting it up
+
+**Order matters. The handler must be live before the domain is applied**, or
+every verification and every password reset 404s at once — the same
+deploy-the-dependency-first discipline the rules have.
+
+1. **Ship `auth-action.html`.** Confirm `https://pints.fr/auth-action.html`
+   returns 200.
+2. **Firebase console → Authentication → Templates**, edit a template, click
+   **customize domain**, enter `pints.fr`.
+3. **Add the DNS records at GoDaddy.** Read the exact values off the console —
+   the shape is:
+
+   | Type | Host | Value |
+   |---|---|---|
+   | TXT | `@` | `firebase=pints-conference` |
+   | TXT | `@` | `v=spf1 include:_spf.firebasemail.com ~all` |
+   | CNAME | `firebase1._domainkey` | `mail-pints-fr.<dkim1>._domainkey.firebasemail.com.` |
+   | CNAME | `firebase2._domainkey` | `mail-pints-fr.<dkim2>._domainkey.firebasemail.com.` |
+
+   None of these collide with GitHub Pages: TXT at `@` coexists with the A
+   records, and the `_domainkey` names are subdomains Pages does not use. Use
+   `@`, not the bare apex name — GoDaddy rejects the latter.
+
+   **Only one `v=spf1` TXT record is allowed per domain.** The zone had no TXT
+   records at all before this, so there was nothing to merge with; if that ever
+   changes, merge the values into the single record rather than adding a second.
+   A second silently breaks SPF for *all* mail from the domain.
+
+4. **Add a DMARC record**, which Firebase does not ask for and institutional
+   filters do check:
+
+   | Type | Host | Value |
+   |---|---|---|
+   | TXT | `_dmarc` | `v=DMARC1; p=none; rua=mailto:<an organizer>` |
+
+   `p=none` first: it publishes a policy and collects reports without risking
+   legitimate mail. Tighten to `p=quarantine` once the reports come back clean.
+
+5. **Wait for the green "Verification complete"** on the Templates tab. Up to 24
+   hours.
+6. **Set the sender name** to `PINTS Conference` and the **reply-to** to a real
+   organizer address. `pints.fr` publishes no MX record, so nothing receives mail
+   sent to `noreply@pints.fr`.
+7. **Set the action URL** to `https://pints.fr/auth-action.html`. This is
+   deliberately a flat page at the root rather than Firebase's reserved
+   `/__/auth/action`, so nothing depends on `.nojekyll` continuing to keep an
+   underscore-prefixed directory publishable.
+8. **Now** click **Apply Custom Domain**.
+
+Steps 2-8 are all reversible from the console in seconds: remove the custom
+domain and links revert to `firebaseapp.com`.
+
+#### The measurement
+
+**Register a throwaway account with an `@ens.psl.eu` address and confirm the mail
+reaches the inbox rather than quarantine.** Then check the raw headers for
+`dkim=pass header.d=pints.fr`, `spf=pass` and `dmarc=pass`. Re-run this before
+announcing that submissions are open, and record the result here either way —
+this is the test the 2026-07-29 entry above failed.
+
+**Also send a password reset and complete it end to end.** It is the regression
+most likely to be missed, because nothing about registering exercises it.
 
 **Unblocking one person in the meantime:** Firebase console →
 **Authentication → Users**, find them, and mark the address verified.

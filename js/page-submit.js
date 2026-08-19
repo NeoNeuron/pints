@@ -139,8 +139,11 @@ function showVerifyGate(user) {
 
   const where = document.createElement("p");
   where.className = "muted";
-  where.textContent = "The message comes from a firebaseapp.com address, so check "
-    + "your spam or quarantine folder: some university mail servers hold it there.";
+  // Deliberately does not name the sending domain. It changes when the pints.fr
+  // custom domain is applied in the console (see the README), and copy that has
+  // to be edited in step with a console setting is copy that will be wrong.
+  where.textContent = "Check your spam or quarantine folder if it has not "
+    + "arrived: some university mail servers hold it there.";
 
   const resend = document.createElement("button");
   resend.type = "button";

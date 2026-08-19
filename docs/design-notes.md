@@ -512,6 +512,12 @@ obvious cause until you seed it. That is the *desired* behaviour in production
 
 ### 7.9 The listing gap got a scheduled sweep, not an auth-action page
 
+**Its conclusion was overtaken by §7.25 — but its cost estimate was not.** The
+site now does host `auth-action.html`, for a reason this section did not have,
+and it cost exactly what this section predicted. The scheduled sweep stays: the
+handler still cannot publish for somebody who is signed in nowhere, which is the
+gap the sweep exists to close.
+
 §7.2 hangs the public participant write on `account.html`, because the
 verification link already lands there and already forces a token refresh. That
 covers most people instantly and two groups not at all: anyone who opens the
@@ -964,19 +970,73 @@ previous design is a better failure than degrading to nothing, and it is the sam
 posture the rest of the page takes: no gallery documents, or an unreachable
 Firestore, and the Archive page is the page it was.
 
+### 7.25 We built the auth-action page §7.9 refused, because the reason changed
+
+§7.9 weighed hosting Firebase's email action handler and said no: it takes over
+the handler for *every* auth email, so it would also have to implement password
+reset and email change correctly — more surface, and more to get wrong, for a
+benefit a five-minute sweep already delivered. That reasoning was right, and the
+sweep is still there.
+
+What changed is that the page stopped being optional. Abstract submission needs a
+verified address, and Firebase's default sender
+(`noreply@pints-conference.firebaseapp.com`) is a domain PINTS cannot publish DNS
+for, so the mail carries no alignment an institutional filter trusts. Measured:
+Gmail accepted it, `@ens.psl.eu` quarantined it. The fix is to send as `pints.fr`,
+and applying a custom domain in Firebase rewrites **the action links as well as
+the From field**. `pints.fr` is GitHub Pages. There is no Firebase handler there.
+
+So the choice was never "handler or sweep". It was "handler, or keep sending mail
+that the intended audience's mail servers eat".
+
+Three things fall out of that:
+
+- **All three modes, not one.** §7.9 predicted this exact cost and it is real:
+  `sendReset()` is live, so password-reset links land on our page the moment the
+  domain is applied. A handler that only knew `verifyEmail` would break password
+  reset silently, for everyone, at the instant of a console click. `recoverEmail`
+  is there for the same reason — Firebase can send it and we do not get to decline.
+- **Ordering, not correctness, is the risk.** The page has to be deployed and
+  returning 200 *before* Apply Custom Domain is clicked. Nothing about the code
+  can protect against getting that backwards; only the runbook can, which is why
+  the README states it as an order rather than a list. It is the same shape as
+  the rules-before-code rule.
+- **The action URL is `auth-action.html`, not `/__/auth/action`.** Firebase's
+  reserved path is available, and taking it would have made the site's mail
+  depend on `.nojekyll` continuing to exist to keep an underscore-prefixed
+  directory publishable — a coupling between a Jekyll implementation detail and
+  whether anybody can reset their password. A flat page at the root matches every
+  other page here and depends on nothing.
+
+The `continueUrl` Firebase echoes back gets `safeContinueUrl()` rather than being
+followed. It is the same threat as `?next=` — a value that arrives in a link a
+stranger can write and ends in a navigation — so it gets the same answer: resolve
+it, require the same origin, then hand the bare filename back to `safeNext()`. Two
+gates. The query string is carried into that second check rather than stripped
+first, so a URL that is suspicious *because* it has one gets refused instead of
+quietly cleaned up and followed.
+
+One thing improved for free. People used to land on a bare Google-branded
+confirmation page with no route back — the complaint already written into the
+comment on `returnToAccount()`. They now land on a PINTS page that tells them
+what just opened up and links to it.
+
 ## 8. Open items
 
 - **Restrict the web API key** and enable App Check (§3.4). Free, console-only.
 - **Verify email deliverability from an institutional address** after any sender
-  change. Gmail arriving proves the pipeline, not the filters.
+  change. Gmail arriving proves the pipeline, not the filters. Since §7.25 the
+  test is specific: register from `@ens.psl.eu` and check the raw headers for
+  `dkim=pass header.d=pints.fr`, `spf=pass`, `dmarc=pass`.
 - **Poster numbers can collide** under concurrent review: `nextPosterNumber()`
   suggests, nothing enforces. Safe for one organizer working sequentially; make
   `publishAbstract` a transaction if review is ever shared.
 - **Mailing-list sending** is not built; CSV export stands in. Real sending needs
   a paid plan.
-- **`pints.fr` exists** and currently forwards to the 2025 site. Pointing Pages
-  at it would give the site a proper domain and remove the `404.html` `<base>`
-  coupling.
+- **`pints.fr` is live** on GitHub Pages, and its DNS at GoDaddy is now also
+  what makes verification mail deliverable (§7.25). The zone had no MX, SPF or
+  DMARC record before that work; DMARC starts at `p=none` and wants tightening to
+  `p=quarantine` once the reports come back clean.
 - **The logo's grey is now `#5c5c5c`** (was the designer's `#808080`). With
   `.hero::after` at `.78` the date line reads 4.4:1 against a black pixel and
   4.9:1 over a mid-tone, so it clears AA over any real photograph and sits just

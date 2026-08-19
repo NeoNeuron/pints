@@ -25,6 +25,45 @@ export function destinationAfterAuth(next, { isAdmin = false } = {}) {
   return safeNext(next) ?? (isAdmin ? "admin.html" : "account.html");
 }
 
+/**
+ * The validated destination from a Firebase `continueUrl`, or null.
+ *
+ * Firebase hands this one back as an ABSOLUTE url — `returnToAccount()` in
+ * auth.js builds it with `new URL(...).href` — so safeNext() rejects it by
+ * design, and auth-action.html needs a way to say yes to our own pages without
+ * saying yes to everybody's.
+ *
+ * It arrives in the query string of a link anyone can write, exactly like
+ * `next`, so it gets the same treatment: resolve it, require the SAME ORIGIN,
+ * and then hand the bare filename back to safeNext() rather than trusting the
+ * parse. Two gates, because the value ends up in a navigation.
+ *
+ * `origin` is a parameter so this is testable off a browser; callers pass
+ * nothing and get location.origin.
+ */
+export function safeContinueUrl(value, origin = globalThis.location?.origin) {
+  const text = String(value ?? "").trim();
+  if (!text || !origin) return null;
+  let url;
+  try {
+    url = new URL(text, origin);
+  } catch {
+    return null;
+  }
+  // Catches "//evil.example" and "https://evil.example/account.html" alike:
+  // both parse, and both parse to somewhere that is not us.
+  if (url.origin !== origin) return null;
+  // The site is flat, so any page of ours is a basename at the root. Dropping
+  // the directory keeps the result inside the narrow shape safeNext() knows.
+  //
+  // The query is carried into that check rather than stripped first. We never
+  // generate a continueUrl with one, so its presence means the link was written
+  // by somebody else — and safeNext() already refuses a query. Handing it the
+  // whole thing lets one rule decide, instead of quietly discarding the part
+  // that made the url suspicious.
+  return safeNext(url.pathname.replace(/^.*\//, "") + url.search + url.hash);
+}
+
 /** Build the `next` value for the page asking for a sign-in. `file` + `hash`. */
 export function nextValue(file, hash = "") {
   return safeNext(`${file}${hash}`);

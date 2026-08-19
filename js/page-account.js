@@ -41,9 +41,8 @@ if (warnIfUnconfigured(msg)) {
     explain.textContent =
       "Your email address is not confirmed yet, so your name is not on the "
       + "participant list and you cannot submit an abstract. Both open up the "
-      + "moment you click the link. The message comes from a firebaseapp.com "
-      + "address, so check your spam or quarantine folder: some university mail "
-      + "servers hold it there.";
+      + "moment you click the link. Check your spam or quarantine folder if it "
+      + "has not arrived: some university mail servers hold it there.";
 
     const again = document.createElement("button");
     again.type = "button";

@@ -334,7 +334,7 @@ function messageBody(data, id) {
     data.message,
     "",
     "--",
-    "Sent from the contact form at https://pints-fr.github.io/contact.html",
+    "Sent from the contact form at https://pints.fr/contact.html",
     `Reply to this mail and it goes to ${data.email}, not to the website.`,
     `Message id: ${id}`,
   ].join("\n");
@@ -400,6 +400,16 @@ export const mailContactMessage = onDocumentCreated(
       return;
     }
 
+    // Gmail, and the From below stays a @gmail.com address ON PURPOSE.
+    //
+    // pints.fr now publishes an SPF record and DKIM keys for Firebase's mail
+    // servers, so that verification mail is signed as pints.fr — see the README.
+    // NONE OF THAT APPLIES HERE. This transport is Gmail, which can only sign as
+    // gmail.com. Changing `from` to something @pints.fr would send mail claiming
+    // a domain whose SPF record does not list Gmail and whose DKIM keys Gmail
+    // does not hold: it would fail DMARC outright and land in exactly the spam
+    // folder the pints.fr work exists to escape. Moving this to @pints.fr means
+    // moving off Gmail first.
     const transport = nodemailer.createTransport({
       host: "smtp.gmail.com",
       port: 465,

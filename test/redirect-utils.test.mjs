@@ -1,8 +1,10 @@
 import { strict as assert } from "node:assert";
 import { test } from "node:test";
 import {
-  destinationAfterAuth, nextValue, safeNext, withNext,
+  destinationAfterAuth, nextValue, safeContinueUrl, safeNext, withNext,
 } from "../js/redirect-utils.mjs";
+
+const ORIGIN = "https://pints.fr";
 
 test("safeNext accepts a page of this site, with or without a fragment", () => {
   assert.equal(safeNext("account.html"), "account.html");
@@ -45,4 +47,42 @@ test("withNext only appends a target it would follow", () => {
     "register.html?next=account.html%23abstract");
   assert.equal(withNext("register.html", null), "register.html");
   assert.equal(withNext("register.html", "https://evil.example"), "register.html");
+});
+
+// ------------------------------------------------- the Firebase continueUrl
+
+test("safeContinueUrl accepts our own pages, absolute or rooted", () => {
+  assert.equal(safeContinueUrl("https://pints.fr/account.html", ORIGIN), "account.html");
+  assert.equal(safeContinueUrl("https://pints.fr/account.html#abstract", ORIGIN),
+    "account.html#abstract");
+  assert.equal(safeContinueUrl("/submit.html", ORIGIN), "submit.html");
+  assert.equal(safeContinueUrl("  https://pints.fr/index.html  ", ORIGIN), "index.html");
+});
+
+test("safeContinueUrl rejects anything that would leave the site", () => {
+  for (const hostile of [
+    "https://evil.example/account.html",
+    "//evil.example/account.html",
+    "http://pints.fr.evil.example/account.html",
+    // Same name, wrong scheme: origin comparison is exact, and it must be.
+    "http://pints.fr/account.html",
+    "javascript:alert(1)",
+    "",
+    "   ",
+    null,
+    undefined,
+  ]) {
+    assert.equal(safeContinueUrl(hostile, ORIGIN), null, `should reject ${String(hostile)}`);
+  }
+});
+
+test("safeContinueUrl still applies the safeNext shape to what survives", () => {
+  // Same origin, but not a page of ours in the shape safeNext() allows.
+  assert.equal(safeContinueUrl("https://pints.fr/account.html?token=x", ORIGIN), null);
+  assert.equal(safeContinueUrl("https://pints.fr/", ORIGIN), null);
+  assert.equal(safeContinueUrl("https://pints.fr/assets/pints-mark.svg", ORIGIN), null);
+});
+
+test("safeContinueUrl needs an origin to compare against", () => {
+  assert.equal(safeContinueUrl("https://pints.fr/account.html", undefined), null);
 });
