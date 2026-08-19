@@ -3,7 +3,7 @@
 Static site for the PINTS meeting (Paris Île-de-France Neuroscience, Theory, and
 Systems). No build step: the repository contents *are* the deployed site.
 
-- **Live site:** <https://neoneuron.github.io/pints/>
+- **Live site:** <https://pints-fr.github.io/>
 - **Design notes and lessons:** [`docs/design-notes.md`](docs/design-notes.md) —
   start here if you are picking this up. Why the architecture is what it is, and
   the traps that cost time the first time round.
@@ -13,7 +13,7 @@ Systems). No build step: the repository contents *are* the deployed site.
 ## Status
 
 **Phase 0 (static site) is complete and deployed** at
-<https://neoneuron.github.io/pints/>. Every page and asset serves, markdown
+<https://pints-fr.github.io/>. Every page and asset serves, markdown
 renders, the custom 404 works, and the browser console is clean.
 
 **All three phases are built, deployed, and live.** Every requirement in
@@ -703,8 +703,10 @@ PATH="/opt/homebrew/opt/openjdk/bin:$PATH" npm run emulators
   wordmark with the pint-glass "i" landing on the N. Changing the date or the
   venue means editing the constants at the top of `scripts/logo/build_logo.py`
   and re-running it; the alt text in `index.html` has to be updated to match.
-- **All paths are relative.** Never write a leading-slash path: the site may be
-  served from `<owner>.github.io/pints/`, where absolute paths would 404.
+- **All paths are relative.** Never write a leading-slash path: the site is
+  served from the root of `pints-fr.github.io` today, but was served from
+  `neoneuron.github.io/pints/` before the move to the org and could move again —
+  absolute paths would 404 on any subpath.
   **The single exception is `404.html`**, which Pages renders at the *requested*
   URL rather than at the site root — relative paths there would resolve against
   the bad URL. It is therefore self-contained, with inline CSS and a `<base>`
@@ -718,10 +720,16 @@ GitHub Pages serves the `main` branch from the repository root. Pushing to
 which drops any path beginning with an underscore and would transform
 `content/*.md` instead of serving it raw for the client-side renderer.
 
-**If the site URL ever changes** — moving to a PINTS org, or attaching a custom
-domain — `404.html`'s `<base href="/pints/">` must change to match. Nothing will
-appear broken: the 404 page still renders, its links just point at the wrong
-path. Verifying a deliberately bogus URL is therefore part of any such move.
+The repository is `pints-fr/pints-fr.github.io`, owned by the **`pints-fr`**
+organization. Because it is named `<org>.github.io`, Pages serves it at the root
+of <https://pints-fr.github.io/> rather than on a `/pints/` subpath — which is
+also how the `pints.fr` custom domain will serve it, so no path has to change
+again at DNS cutover.
+
+**If the site URL ever changes again** — back to a repo-name subpath —
+`404.html`'s `<base href="/">` must change to match. Nothing will appear broken:
+the 404 page still renders, its links just point at the wrong path. Verifying a
+deliberately bogus URL is therefore part of any such move.
 
 ### Caching after a deploy
 
@@ -774,8 +782,9 @@ Two free mitigations, neither yet applied (checked 2026-07-30: the key answers
 
 1. **Restrict the key** — Google Cloud console → *APIs & Services →
    Credentials* → the browser key. Set *Application restrictions* to **HTTP
-   referrers** and allow `neoneuron.github.io/*` (plus `localhost` for local
-   work). Under *API restrictions*, limit it to the APIs actually used:
+   referrers** and allow `pints-fr.github.io/*` (plus `neoneuron.github.io/*`
+   while the old URL still redirects, and `localhost` for local work). Under
+   *API restrictions*, limit it to the APIs actually used:
    Identity Toolkit, Cloud Firestore, Token Service. Test sign-in afterwards —
    an over-tight list breaks auth.
 2. **Enable App Check** with reCAPTCHA v3 (free) and enforce it on Firestore, so
@@ -798,7 +807,8 @@ rotating the key — rotation changes the string without changing what it can do
 3. **Build → Authentication → Get started → Sign-in method → Email/Password →
    Enable.** Leave "Email link" off.
 4. **Authentication → Settings → Authorized domains → Add domain** →
-   `neoneuron.github.io`. Add `localhost` and `127.0.0.1` too, for local work.
+   `pints-fr.github.io`. Add `neoneuron.github.io` (the pre-org host),
+   `localhost`, and `127.0.0.1` too.
    *Skipping this makes every sign-in fail with `auth/unauthorized-domain`.*
 5. **Project settings → General → Your apps → Web (`</>`)**, register the app,
    copy the `firebaseConfig` object, and paste it over the placeholders in

@@ -10,18 +10,18 @@
   no shared header injection.
 
   GitHub Pages serves 404.html from the REQUESTED url's path, not from the site
-  root. A visitor hitting /pints/typo gets this file rendered at /pints/typo/,
-  where a relative "css/styles.css" resolves to /pints/typo/css/styles.css and
-  404s — the page would load unstyled with no navigation. This is the one file
-  in the repository that cannot use relative asset paths.
+  root. A visitor hitting /typo gets this file rendered at /typo/, where a
+  relative "css/styles.css" resolves to /typo/css/styles.css and 404s — the page
+  would load unstyled with no navigation. This is the one file in the repository
+  that cannot use relative asset paths.
 
   The <base> tag below is the only thing to change if the site moves: it must
-  match the path the site is served from. Currently NeoNeuron/pints on GitHub
-  Pages, i.e. https://neoneuron.github.io/pints/ — hence "/pints/". If the site
-  later moves to a PINTS org or a custom domain and is served at the root,
-  change it back to "/".
+  match the path the site is served from. Currently pints-fr/pints-fr.github.io
+  on GitHub Pages, served at the root — hence "/". It was "/pints/" while the
+  site lived at https://neoneuron.github.io/pints/. If it ever moves back to a
+  repo-name subpath, this must become "/<repo-name>/".
 -->
-<base href="/pints/">
+<base href="/">
 <style>
   :root { --ink:#1a1a1a; --muted:#5c5c5c; --line:#dcdcdc; --bg-soft:#f6f6f4; --accent:#7b1e3a; }
   body { margin:0; font:16px/1.6 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; color:var(--ink); }
