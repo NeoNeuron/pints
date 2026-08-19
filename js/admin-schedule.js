@@ -140,6 +140,7 @@ export async function mountScheduleTab(host) {
     kind.textContent = item.kind ?? "other";
 
     const tools = document.createElement("td");
+    tools.className = "tools";
     const edit = document.createElement("button");
     edit.className = "secondary";
     edit.textContent = "Edit";

@@ -434,6 +434,11 @@ th { font-size: .82rem; text-transform: uppercase; letter-spacing: .04em; color:
 tr.kind-break td, tr.kind-lunch td { color: var(--muted); font-style: italic; }
 td.time { white-space: nowrap; font-variant-numeric: tabular-nums; }
 
+/* Row actions are one line: this is the narrowest column, so Edit and Delete
+   would otherwise stack and double every row's height. The table already sits
+   in .table-scroll, which absorbs the extra width on a narrow screen. */
+td.tools { white-space: nowrap; width: 1%; }
+
 /* The title is what the reader is scanning for, so it carries the weight. The
    muted rows keep theirs: coffee and lunch are the punctuation between sessions,
    and bolding them would flatten the distinction the italics are making. */
