@@ -17,8 +17,13 @@ import { abstractCard, abstractPermalink } from "./abstract-card.js";
  * `onEdit` is called when the button is pressed; the caller owns swapping in
  * `mountAbstractForm`, because the two pages mount it into different hosts with
  * different options.
+ *
+ * `onDelete`, if given, adds a "Delete this abstract" button beside Edit. It is
+ * optional rather than always-on: abstracts.html has nowhere else for a
+ * deletion to happen, so it wires this up, while submit.html already offers
+ * delete from inside the editor and does not need it twice.
  */
-export async function mountSubmissionCard(host, abstract, { onEdit }) {
+export async function mountSubmissionCard(host, abstract, { onEdit, onDelete = null }) {
   // The poster/talk decision and the board number live only on the public copy,
   // so a decided abstract costs one extra read and an undecided one costs none.
   const published = abstract.status === "accepted"
@@ -51,6 +56,18 @@ export async function mountSubmissionCard(host, abstract, { onEdit }) {
   edit.disabled = frozen;
   edit.addEventListener("click", () => onEdit());
   actions.append(edit);
+
+  if (onDelete) {
+    // Frozen exactly when Edit is: firestore.rules refuses to delete an
+    // accepted abstract for the same reason it refuses to edit one.
+    const del = document.createElement("button");
+    del.type = "button";
+    del.className = "danger";
+    del.textContent = "Delete this abstract";
+    del.disabled = frozen;
+    del.addEventListener("click", () => onDelete());
+    actions.append(del);
+  }
 
   if (frozen) {
     const note = document.createElement("span");

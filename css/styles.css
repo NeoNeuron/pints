@@ -387,7 +387,7 @@ figcaption { margin-top: .35rem; max-width: var(--measure); color: var(--muted);
    lazily, so there would otherwise be nothing for CSS to reveal. This only has
    to strip the controls and the chrome around them. */
 @media print {
-  .site-header, .site-footer, .to-top, #filters, #expand-all, #count, .permalink { display: none; }
+  .site-header, .site-footer, .to-top, #filters, #expand-all, #count, #submit-panel, .permalink { display: none; }
   .abstract, .card { border: 0; padding-inline: 0; break-inside: avoid; }
   .abstract > summary { list-style: none; padding-inline: 0; }
   .abstract > summary::-webkit-details-marker { display: none; }

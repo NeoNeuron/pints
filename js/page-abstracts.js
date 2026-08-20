@@ -1,14 +1,16 @@
 import { mountLayout, setAuthLink } from "./layout.js";
 import { warnIfUnconfigured } from "./firebase.js";
 import { onUser } from "./auth.js";
-import { getPublicAbstract, listPublicAbstracts } from "./db.js";
+import { deleteAbstract, getMyAbstract, getPublicAbstract, listPublicAbstracts } from "./db.js";
 import { filterAbstracts, groupByTopic, sortPublicAbstracts } from "./abstract-utils.mjs";
 import { abstractCard, abstractDisclosure, abstractPermalink } from "./abstract-card.js";
+import { mountSubmissionCard } from "./submission-view.js";
+import { deleteFigure } from "./storage.js";
 import { ABSTRACT_TOPICS, SITE_NAME, TOPIC_LABELS } from "./config.mjs";
 import { hydrateMarkdownHosts } from "./content-hydrate.js";
+import { withNext } from "./redirect-utils.mjs";
 
 mountLayout();
-onUser(({ user, isAdmin }) => setAuthLink({ signedIn: Boolean(user), isAdmin }));
 
 const listEl = document.getElementById("list");
 const countEl = document.getElementById("count");
@@ -18,6 +20,60 @@ const topicEl = document.getElementById("topic");
 const filtersEl = document.getElementById("filters");
 const guidelinesEl = document.getElementById("guidelines");
 const headingEl = document.querySelector("main h1");
+const submitPanelEl = document.getElementById("submit-panel");
+const submitCtaBlockEl = document.getElementById("submit-cta-block");
+const submitCta = document.getElementById("submit-cta");
+const myAbstractEl = document.getElementById("my-abstract");
+
+// onAuthStateChanged can fire more than once (sign-out elsewhere, a token
+// refresh), so this has to be a full re-render, not a one-way reveal — or a
+// stale card would survive a sign-out on this same page.
+let submitPanelToken = 0;
+onUser(({ user, isAdmin }) => {
+  setAuthLink({ signedIn: Boolean(user), isAdmin });
+  renderSubmitPanel(user).catch((err) => console.error("[pints] submit panel", err));
+});
+
+async function renderSubmitPanel(user) {
+  const token = ++submitPanelToken;
+  submitCta.href = user ? "submit.html" : withNext("login.html", "submit.html");
+
+  const mine = user
+    ? await getMyAbstract(user.uid).catch((err) => {
+      console.error("[pints] getMyAbstract", err);
+      return null;
+    })
+    : null;
+
+  if (token !== submitPanelToken) return; // superseded by a later auth state
+
+  if (mine) {
+    submitCtaBlockEl.hidden = true;
+    await mountSubmissionCard(myAbstractEl, mine, {
+      onEdit: () => { location.href = "submit.html?edit=1"; },
+      onDelete: () => deleteMyAbstract(user, mine),
+    });
+  } else {
+    submitCtaBlockEl.hidden = false;
+    myAbstractEl.replaceChildren();
+  }
+}
+
+/** Delete the signed-in visitor's own abstract, then fall back to the CTA. */
+async function deleteMyAbstract(user, mine) {
+  if (!confirm(`Delete “${mine.title ?? "your abstract"}”? This cannot be undone.`)) return;
+  try {
+    await deleteAbstract(mine.id);
+    // Best-effort: an orphaned figure is invisible and costs nothing, whereas
+    // failing the delete over it would leave the abstract in place.
+    await deleteFigure(mine.figurePath).catch((err) => console.error("[pints] deleteFigure", err));
+    await renderSubmitPanel(user);
+  } catch (err) {
+    msg.className = "msg err";
+    msg.textContent = "Could not delete your abstract. Please try again.";
+    console.error("[pints] deleteAbstract", err);
+  }
+}
 
 // ?a=<id> asks for one abstract by itself, which is what a shared link is. The
 // list is the default, so an absent or unknown parameter degrades to it rather
@@ -32,6 +88,7 @@ async function mountOne(id) {
   // The poster guidelines are advice for people about to submit, not context for
   // a shared abstract, so this view drops them rather than hydrating them.
   guidelinesEl.remove();
+  submitPanelEl.hidden = true;
   filtersEl.hidden = true;
   countEl.hidden = true;
 

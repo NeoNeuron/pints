@@ -66,7 +66,17 @@ async function mount(user, isAdmin) {
   // first are to check what was sent, not to change it. Shown whatever the
   // address's state — reading is never gated, and the form behind that button
   // is where abstract-form says what is closed and why.
-  if (mine) return showSubmitted(mine);
+  //
+  // ?edit=1 skips straight to the editor instead: it is how the "Edit
+  // submission" button on abstracts.html's card arrives here, and landing on
+  // the same card a second time would just be an extra click to the thing the
+  // visitor already asked for. Still falls back to the card for a frozen or
+  // unverified abstract, where showForm would have nothing to offer anyway.
+  if (mine) {
+    const wantsEdit = new URLSearchParams(location.search).get("edit") === "1";
+    if (wantsEdit && mine.status !== "accepted" && user.emailVerified) return showForm(mine);
+    return showSubmitted(mine);
+  }
 
   if (user.emailVerified) await showForm(null);
 }
@@ -86,10 +96,21 @@ async function showForm(abstract) {
       // Re-read rather than reuse the draft: the record that matters is the one
       // Firestore actually holds, and the confirmation should show that.
       const saved = await getMyAbstract(state.user.uid);
-      say(abstract
-        ? "Abstract updated."
-        : "Abstract received. You can come back and edit it until the deadline.", "ok");
-      if (saved) await showSubmitted(saved);
+      // Two cases send them to abstracts.html instead of showing the card here:
+      // a delete (onSaved fires with nothing left to hand back — `saved` is
+      // null, and leaving the just-deleted abstract sitting filled-in in a
+      // form whose Save button still works is worse than leaving the page),
+      // and a first submission (`abstract` was null going in) — abstracts.html
+      // shows their own card the same way this page does, and is where the
+      // home page's "Submit an abstract" button now points once someone has
+      // an abstract on file, so a first save should land them exactly where
+      // later visits will.
+      if (!saved || !abstract) {
+        location.href = "abstracts.html";
+        return;
+      }
+      say("Abstract updated.", "ok");
+      await showSubmitted(saved);
     },
   });
 }

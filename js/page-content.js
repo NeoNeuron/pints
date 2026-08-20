@@ -1,7 +1,7 @@
 import { mountLayout, setAuthLink } from "./layout.js";
 import { onUser } from "./auth.js";
 import { hydrateMarkdownHosts } from "./content-hydrate.js";
-import { getHeroPhotos } from "./db.js";
+import { getHeroPhotos, getMyAbstract } from "./db.js";
 import { mountHeroSlider } from "./hero-slider.js";
 import { heroPhotos } from "./hero-utils.mjs";
 import { withNext } from "./redirect-utils.mjs";
@@ -19,12 +19,29 @@ mountLayout();
 const submitCta = document.getElementById("submit-cta");
 
 // Keep the header's "Sign in" link in step with auth state on the static pages.
+let submitCtaToken = 0;
 onUser(({ user, isAdmin }) => {
   setAuthLink({ signedIn: Boolean(user), isAdmin });
-  if (submitCta) {
-    submitCta.href = user ? "submit.html" : withNext("login.html", "submit.html");
-  }
+  updateSubmitCta(user).catch((err) => console.error("[pints] submit cta", err));
 });
+
+// Someone who already has an abstract on file is not here to submit a first
+// one — abstracts.html is where they can see it (and its Edit button), so the
+// button sends them there instead of back into a blank first-submission form.
+async function updateSubmitCta(user) {
+  if (!submitCta) return;
+  const token = ++submitCtaToken;
+  if (!user) {
+    submitCta.href = withNext("login.html", "submit.html");
+    return;
+  }
+  const mine = await getMyAbstract(user.uid).catch((err) => {
+    console.error("[pints] getMyAbstract", err);
+    return null;
+  });
+  if (token !== submitCtaToken) return; // superseded by a later auth state
+  submitCta.href = mine ? "abstracts.html" : "submit.html";
+}
 
 await hydrateMarkdownHosts();
 
