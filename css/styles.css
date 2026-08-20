@@ -54,12 +54,10 @@ a { color: var(--accent); }
    letters look. */
 .brand { display: flex; align-items: center; text-decoration: none; }
 .brand img { display: block; height: 1.85rem; width: auto; }
-.site-nav { display: flex; flex-wrap: wrap; gap: .25rem .35rem; margin-left: auto; }
+.site-nav { display: flex; flex-wrap: wrap; gap: .25rem 1.05rem; margin-left: auto; }
 /* nowrap so a two-word label like "My account" can never break mid-label and
-   drag the row height with it. Padding on all sides, not just vertical, gives
-   the hover pill below somewhere to sit without nudging layout when it
-   appears -- the padding is constant, only the fill and lift are new. */
-.site-nav a { color: var(--muted); text-decoration: none; padding: .45rem .85rem; border-radius: 999px; border-bottom: 2px solid transparent; white-space: nowrap; }
+   drag the row height with it. */
+.site-nav a { color: var(--muted); text-decoration: none; padding: .25rem 0; border-bottom: 2px solid transparent; white-space: nowrap; transition: color .2s ease; }
 .site-nav a[aria-current="page"] { color: var(--ink); border-bottom-color: var(--accent); }
 .site-nav a.auth-link, .site-nav button.auth-link { color: var(--accent); font-weight: 600; }
 /* The "Sign out" trigger is a <button>, not a link, since it performs an
@@ -68,14 +66,36 @@ a { color: var(--accent); }
   background: none;
   border: none;
   border-bottom: 2px solid transparent;
-  border-radius: 999px;
   font: inherit;
   cursor: pointer;
-  padding: .45rem .85rem;
+  padding: .25rem 0;
+  transition: color .2s ease;
 }
 /* display:contents so the links inside become flex items of .site-nav and pick
    up its gap, rather than bunching together inside the wrapper. */
 .site-nav .auth-links { display: contents; }
+
+/* Hover and keyboard focus both flag a nav item the same way: a step darker
+   and visually heavier. The weight is faked with a doubled text-shadow
+   rather than a real font-weight change -- a real one shifts each glyph's
+   own width, which nudges every item after it in the row; the shadow adds
+   heft without moving anything. outline: none because that colour + weight
+   change on the element itself IS the focus indicator here -- otherwise
+   .site-nav button.auth-link would also inherit the thick accent box
+   :is(button, .button):focus-visible below draws for real buttons, which
+   reads as a stray box around a few words of plain text. */
+.site-nav a:hover, .site-nav a:focus-visible,
+.site-nav button.auth-link:hover, .site-nav button.auth-link:focus-visible {
+  text-shadow: 0 0 .5px currentColor, 0 0 .5px currentColor;
+  outline: none;
+}
+.site-nav a:not(.auth-link):hover, .site-nav a:not(.auth-link):focus-visible {
+  color: var(--ink);
+}
+.site-nav a.auth-link:hover, .site-nav a.auth-link:focus-visible,
+.site-nav button.auth-link:hover, .site-nav button.auth-link:focus-visible {
+  color: var(--accent-dark);
+}
 
 /* The "My account" dropdown under the "Sign out" trigger. Positioned relative
    to .nav-dropdown itself, so it hangs directly under the trigger regardless
@@ -95,7 +115,7 @@ a { color: var(--accent); }
   position: absolute;
   top: 100%;
   right: 0;
-  padding-top: .5rem;
+  padding-top: .6rem;
   opacity: 0;
   visibility: hidden;
   pointer-events: none;
@@ -116,34 +136,31 @@ a { color: var(--accent); }
   transform: translateY(0);
 }
 /* The actual visible box. Separate from .nav-dropdown-menu so the bridge
-   above can stay invisible while this carries all the chrome. */
+   above can stay invisible while this carries all the chrome. No caret: it
+   floats clear of the trigger (see the bridge's padding-top above) rather
+   than sitting flush against it, so proximity alone reads as "belongs to
+   Sign out" without needing an arrow to spell it out. */
 .nav-dropdown-panel {
   position: relative;
   min-width: max-content;
-  padding: .35rem;
+  padding: .4rem;
   background: var(--bg);
   border: 1px solid var(--line);
-  border-radius: var(--radius);
+  border-radius: .9rem;
   box-shadow: 0 8px 20px rgb(from var(--ink) r g b / .16);
 }
-/* The caret ties the panel visually to its trigger -- without one a floating
-   box under "Sign out" reads as unrelated chrome until it's been hovered once. */
-.nav-dropdown-panel::before {
-  content: "";
-  position: absolute;
-  top: -.3rem;
-  right: .9rem;
-  width: .6rem;
-  height: .6rem;
-  background: var(--bg);
-  border-left: 1px solid var(--line);
-  border-top: 1px solid var(--line);
-  transform: rotate(45deg);
-}
+/* Each row gets its own soft highlight on hover, not the panel as a whole --
+   the fill belongs to the item you're pointing at. */
 .nav-dropdown-panel a {
   display: block;
   color: var(--ink);
   border-bottom: none;
+  padding: .55rem .9rem;
+  border-radius: .55rem;
+  transition: background-color .15s ease;
+}
+.nav-dropdown-panel a:hover, .nav-dropdown-panel a:focus-visible {
+  background: var(--accent-soft);
 }
 
 /* Footer */
@@ -586,7 +603,7 @@ button[disabled] { opacity: .5; cursor: not-allowed; }
  * home page -- which is why it is one rule on `button, .button` and not four
  * buttons in the hero.
  *
- * THREE BUTTONS OPT OUT, and all three are buttons only in the DOM sense:
+ * FOUR BUTTONS OPT OUT, and all four are buttons only in the DOM sense:
  *   .to-top        carries its own shadow and its own transition, and fades
  *                  itself in from opacity: 0.
  *   .album-thumb   is an image with a button wrapped round it. `background:
@@ -595,6 +612,13 @@ button[disabled] { opacity: .5; cursor: not-allowed; }
  *   .tabs button   is deliberately chrome-less. A filled background would
  *                  destroy the tab strip, and its selected state is a
  *                  border-bottom-color that a border transition would blur.
+ *   .site-nav button.auth-link  is the "Sign out" trigger. It has its own
+ *                  plain colour+weight hover language (above, with the rest
+ *                  of the nav), and without this exclusion it still picked up
+ *                  this rule's box-shadow and lift -- background and colour
+ *                  were overridden by the more specific nav rule, but nothing
+ *                  overrode those two, so "Sign out" got a floating shadow
+ *                  with no fill behind it: a stray box around plain text.
  *
  * THE :where() INSIDE :not() IS LOAD-BEARING, not a stylistic choice. :not()
  * takes the specificity of its most specific argument, so a bare
@@ -615,11 +639,11 @@ button[disabled] { opacity: .5; cursor: not-allowed; }
  * browser applies :hover on tap and leaves it applied until the next tap
  * somewhere else, which would leave the last button anybody touched lit up. */
 @media (hover: hover) and (pointer: fine) {
-  :is(button, .button):not(:where(.to-top, .album-thumb, .tabs button)) {
+  :is(button, .button):not(:where(.to-top, .album-thumb, .tabs button, .site-nav button.auth-link)) {
     transition: transform .15s ease, box-shadow .15s ease,
                 background-color .15s ease, border-color .15s ease, color .15s ease;
   }
-  :is(button, .button):not(:where([disabled], .to-top, .album-thumb, .tabs button)):hover {
+  :is(button, .button):not(:where([disabled], .to-top, .album-thumb, .tabs button, .site-nav button.auth-link)):hover {
     transform: translateY(-2px);
     box-shadow: 0 4px 10px rgb(from var(--ink) r g b / .18);
     /* Named for all three variants at once: a secondary fills from transparent,
@@ -635,28 +659,6 @@ button[disabled] { opacity: .5; cursor: not-allowed; }
     background: var(--err-dark);
     border-color: var(--err-dark);
   }
-
-  /* The navbar gets the same lift-and-shadow language as buttons above, but
-     filled with --accent-soft rather than solid --accent-dark: seven nav
-     items flashing solid maroon as the cursor crosses the row would be loud
-     where a single button rising is a deliberate accent. Nothing else sets
-     `background` on these selectors, so this composes cleanly with the
-     existing color/border-bottom rules above -- no specificity fight. */
-  .site-nav a, .site-nav button.auth-link {
-    transition: transform .15s ease, box-shadow .15s ease, background-color .15s ease;
-  }
-  .site-nav a:hover, .site-nav button.auth-link:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 3px 8px rgb(from var(--ink) r g b / .12);
-    background: var(--accent-soft);
-  }
-  /* Items inside the dropdown already sit in a shadowed floating panel; a
-     second lift + shadow there reads as busy, so keep the fill and drop
-     those two. (0,3,1) beats the (0,2,1) above regardless of source order. */
-  .site-nav .nav-dropdown-panel a:hover {
-    transform: none;
-    box-shadow: none;
-  }
 }
 
 /* A SECOND reduced-motion block, and it has to be here rather than in the one
@@ -670,8 +672,6 @@ button[disabled] { opacity: .5; cursor: not-allowed; }
 @media (prefers-reduced-motion: reduce) {
   :is(button, .button) { transition: none; }
   :is(button, .button):hover { transform: none; }
-  .site-nav a, .site-nav button.auth-link { transition: none; }
-  .site-nav a:hover, .site-nav button.auth-link:hover { transform: none; }
 }
 
 /* Keyboard parity. Buttons had no focus style of their own and fell back to the
