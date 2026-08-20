@@ -27,6 +27,7 @@ body {
   font: 16px/1.6 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   color: var(--ink);
   background: var(--bg);
+  text-align: justify;
 }
 
 /* padding-inline rather than the `padding` shorthand. As a shorthand this also
@@ -35,7 +36,7 @@ body {
    the header. The header, hero and footer wraps set padding-block explicitly and
    are unaffected either way. */
 .wrap { max-width: 62rem; margin: 0 auto; padding-inline: 1.25rem; }
-.prose { max-width: var(--measure); }
+.prose { max-width: none; }
 .prose h1, .prose h2, .prose h3 { line-height: 1.25; margin: 2rem 0 .5rem; }
 .prose p, .prose ul, .prose ol { margin: 0 0 1rem; }
 /* Markdown cannot attach a class, so any image embedded in content/*.md needs a
