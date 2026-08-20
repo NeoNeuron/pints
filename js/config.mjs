@@ -5,6 +5,23 @@ export const CURRENT_EDITION = "pints2026";
 export const SITE_NAME = "PINTS";
 export const SITE_TAGLINE = "Paris Île-de-France Neuroscience, Theory, and Systems";
 
+// The current edition's date, time, and venue, as content/venue.md states them.
+// The home page's "Add to calendar" links are built from this so they cannot
+// drift from the copy. Times carry an explicit Paris offset -- Nov 6 falls
+// after DST ends, so this is +01:00 -- which calendar-utils.mjs converts to
+// UTC for Google/Outlook/ICS, letting every calendar app show it correctly
+// converted to the viewer's own timezone.
+export const EVENT = {
+  title: "PINTS 2026",
+  description: "Paris Île-de-France Neuroscience, Theory, and Systems.",
+  location: "Daniel Cohen Amphitheater, ENS, 48 Bd Jourdan, 75014 Paris, France",
+  start: "2026-11-06T09:00:00+01:00",
+  end: "2026-11-06T18:00:00+01:00",
+  url: "https://pints.fr/",
+  // Scoped to the edition, not the shared url -- see calendar-utils.mjs.
+  uid: CURRENT_EDITION,
+};
+
 export const NAV = [
   { href: "index.html", label: "Home" },
   { href: "program.html", label: "Program" },

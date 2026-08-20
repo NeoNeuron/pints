@@ -34,10 +34,24 @@
   <div class="wrap">
     <h1><img class="logo" src="assets/pints-2026-header.svg" width="522" height="107"
       alt="PINTS 2026 — Paris Île-de-France Neuroscience, Theory, and Systems. November 6th, 2026, Daniel Cohen Amphitheater, ENS, 48 Bd Jourdan, 75014 Paris"></h1>
-    <p class="actions"><a class="button" id="submit-cta" href="submit.html">Submit an abstract</a>
+    <div class="actions"><a class="button" id="submit-cta" href="submit.html">Submit an abstract</a>
       <a class="button secondary" href="register.html">Register</a>
       <a class="button secondary" href="program.html">See the program</a>
-      <a class="button secondary" href="contact.html">Contact us</a></p>
+      <a class="button secondary" href="contact.html">Contact us</a>
+      <!-- Wired up by js/page-content.js from js/config.mjs's EVENT constant.
+           Reuses the .nav-dropdown/-menu/-panel classes the account menu in
+           js/layout.js already defines, so this looks like the same control
+           rather than a one-off. -->
+      <span class="nav-dropdown" id="add-to-calendar">
+        <button type="button" class="button secondary" aria-expanded="false">Add to calendar ▾</button>
+        <div class="nav-dropdown-menu">
+          <div class="nav-dropdown-panel">
+            <a id="calendar-google" target="_blank" rel="noopener">Google Calendar</a>
+            <a id="calendar-outlook" target="_blank" rel="noopener">Outlook.com</a>
+            <a href="#" id="calendar-ics">Apple / other (.ics)</a>
+          </div>
+        </div>
+      </span></div>
   </div>
 </section>
 <main class="wrap">
