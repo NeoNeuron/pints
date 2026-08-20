@@ -201,10 +201,18 @@ else and the right fallback for a click that beats the rewrite, since
 
 **Signed in but unconfirmed → confirm.** The form is not mounted at all. A panel
 says so, names the address, points at the spam or quarantine folder that
-university filters use, and carries its own **resend** button and an
-**I have confirmed it** button that reloads. The moment somebody discovers the
-mail never arrived is right there on the page they came to use, not on a later
-visit to `account.html`.
+university filters use, and carries its own **resend** button. The moment
+somebody discovers the mail never arrived is right there on the page they came
+to use, not on a later visit to `account.html`. There is no button to reload
+the page and check again — reloading is what a browser already does, and a
+button whose only job is that adds nothing a person does not already know how
+to do.
+
+If the mail never arrives at all rather than lands in spam — a gateway that
+drops it outright, not one that quarantines it — resending cannot help either.
+The panel's last line sends that person to `contact.html`, and organizers can
+now confirm the address by hand from the Participants tab; see "Editing and
+deleting as an organizer" below.
 
 There is no "Your details" block on the form any more. Name, affiliation and
 email belong to the account by the time anyone reaches it, and the profile is
@@ -667,25 +675,38 @@ participant input never renders HTML.
 
 ## Editing and deleting as an organizer
 
-Deletion is the one operation that does not run in the browser, because two
-things make it impossible there: a Firebase Auth account can only be deleted by
-its owner from a client, and `storage.rules` scopes figure deletion to the
-uploader. Both need the Admin SDK, so `functions/` holds these callables:
+Deletion, and hand-confirming a participant's email, are operations that do not
+run in the browser, because the Admin SDK is the only thing that can do them:
+a Firebase Auth account can only be deleted or self-verified by its owner from
+a client, and `storage.rules` scopes figure deletion to the uploader. So
+`functions/` holds these callables:
 
 | Callable | Does |
 |---|---|
 | `deleteAbstractCompletely` | removes the abstract, its published copy, its reviews, its figure |
 | `deleteParticipant` | all of the above for every abstract they own, plus their profile, their public listing, and their login |
+| `listUnverifiedParticipants` | which registered uids Firebase Auth has not marked email-confirmed — read by the Participants tab to decide who gets the **Confirm email** button |
+| `verifyParticipantEmail` | marks a participant's email confirmed by hand and publishes them immediately — for the address a verification mail never reaches at all, see "Register first, then submit" |
 | `backfillParticipants` | every five minutes, publishes verified participants who never loaded `account.html` — see "Being listed without ever loading account.html" |
 | `mailContactMessage` | mails a contact-form message to every organizer — see "Contacting the organizers". **Binds two SMTP secrets: set them before deploying anything here** |
 | `syncDropboxGallery` | **temporarily removed** — see below |
 
-Three of them are here because they must **bypass the rules**: the deletes act on
-somebody else's documents, and the backfill writes on behalf of a person who is
-signed in nowhere. The other reason something may live here is that it must
+Five of them are here because they must **bypass the rules**: the deletes act on
+somebody else's documents, and `listUnverifiedParticipants`, `verifyParticipantEmail`
+and the backfill read or write on behalf of a person who is not the one calling
+them — Auth's `email_verified` flag, in particular, can only be listed or set in
+bulk by the Admin SDK. The other reason something may live here is that it must
 **hold a secret the browser cannot** — which is what `mailContactMessage` and
 `syncDropboxGallery` are doing. Those are the only two reasons anything belongs
 in `functions/`.
+
+**Confirm email only appears on a row Firebase Auth still has unconfirmed.**
+`users/{uid}` — what the rest of the row is drawn from — has no verified flag of
+its own, so the tab calls `listUnverifiedParticipants` once per render to know
+which rows qualify; a row drops the button the moment `verifyParticipantEmail`
+succeeds, since a success re-renders the tab. This is the manual half of the
+promise the verify-gate's last line makes: "tell the organizers and we will
+confirm your address by hand."
 
 **`syncDropboxGallery` is not in `functions/index.js` right now.** It binds three
 Dropbox secrets, and a function whose secrets do not exist cannot be provisioned
@@ -706,8 +727,10 @@ than the first line of defence.
 
 **The site works without them.** Every page loads and every other feature works
 if the functions are never deployed; the two delete buttons report that the
-service is missing when pressed, the Archive page simply shows no photographs,
-and the contact page still validates, stores and confirms — only the mail waits.
+service is missing when pressed, Confirm email never appears on any row since
+`listUnverifiedParticipants` has nothing to return, the Archive page simply
+shows no photographs, and the contact page still validates, stores and
+confirms — only the mail waits.
 Deploy them with:
 
 ```bash

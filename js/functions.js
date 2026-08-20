@@ -61,6 +61,14 @@ export const deleteAbstractCompletely = (abstractId) =>
 export const deleteParticipant = (uid) =>
   call("deleteParticipant", { uid }, "Could not delete the participant.");
 
+/** Uids of registered participants Firebase Auth has not marked email-confirmed. */
+export const listUnverifiedParticipants = () =>
+  call("listUnverifiedParticipants", {}, "Could not check confirmation status.");
+
+/** Mark a participant's email confirmed, for an address that never verified. */
+export const verifyParticipantEmail = (uid) =>
+  call("verifyParticipantEmail", { uid }, "Could not confirm that address.");
+
 /**
  * Re-read a Dropbox folder and cache its photographs in gallery/{year}.
  *

@@ -131,7 +131,7 @@ function showVerifyGate(user) {
   const first = document.createElement("p");
   first.textContent = `You are signed in as ${user.email}, but that address is not `
     + "confirmed yet. We emailed you a link when you registered — open it, then "
-    + "come back to this page.";
+    + "reload this page.";
 
   const why = document.createElement("p");
   why.textContent = "Until you do, your name is not on the public participant "
@@ -179,16 +179,9 @@ function showVerifyGate(user) {
     }
   });
 
-  // Reloading is what picks the confirmation up: the link lands in another tab,
-  // and only a fresh token carries email_verified true.
-  const again = document.createElement("button");
-  again.type = "button";
-  again.textContent = "I have confirmed it";
-  again.addEventListener("click", () => location.reload());
-
   const actions = document.createElement("div");
   actions.className = "actions";
-  actions.append(again, resend, resendMsg);
+  actions.append(resend, resendMsg);
 
   body.append(first, why, where, actions, stuck);
   gate.replaceChildren(head, body);

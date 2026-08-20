@@ -151,6 +151,73 @@ export const deleteParticipant = onCall({ region: REGION }, async (request) => {
   return { deleted: true, abstracts: owned.size };
 });
 
+// -------------------------------------------------- hand-confirming an email
+
+/**
+ * Which registered uids Firebase Auth has not marked email-confirmed.
+ *
+ * `users/{uid}` — what the Participants tab otherwise reads — has no verified
+ * flag; `email_verified` lives only on the Auth account, and listing Auth
+ * accounts in bulk needs the Admin SDK. Without this, the tab could not tell
+ * "Confirm email" apart from a button that does nothing, so it would have to
+ * offer that button on every row instead of only where it acts on something.
+ */
+export const listUnverifiedParticipants = onCall({ region: REGION }, async (request) => {
+  await requireAdmin(request);
+  const unverified = [];
+  let pageToken;
+  do {
+    const page = await getAuth().listUsers(1000, pageToken);
+    for (const user of page.users) if (!user.emailVerified) unverified.push(user.uid);
+    pageToken = page.pageToken;
+  } while (pageToken);
+  return { uids: unverified };
+});
+
+/**
+ * Mark a participant's email confirmed without them ever clicking the link.
+ *
+ * The one case "send it again" cannot fix: mail a gateway drops outright rather
+ * than quarantines. Measured 2026-08-19 against a @cnrs.fr address (see
+ * submit.html's verify-gate) — resending changes nothing when nothing arrives
+ * in the first place, so the panel points stuck participants at the
+ * organizers instead. This is what answers that: Firebase Auth only lets an
+ * account confirm itself from a client, so an organizer confirming somebody
+ * else's address needs the Admin SDK, same as the deletes above.
+ */
+export const verifyParticipantEmail = onCall({ region: REGION }, async (request) => {
+  const adminUid = await requireAdmin(request);
+  const uid = String(request.data?.uid ?? "");
+  if (!uid) throw new HttpsError("invalid-argument", "uid is required.");
+
+  const user = await getAuth().updateUser(uid, { emailVerified: true });
+
+  // Publish immediately rather than leaving them for the next backfillParticipants
+  // sweep: an organizer who just fixed this by hand is the wrong moment to make
+  // that person wait up to five more minutes to appear on the public list.
+  const edition = (await db.doc("config/site").get()).data()?.edition;
+  const profile = (await db.doc(`users/${uid}`).get()).data();
+  let published = false;
+  if (edition && profile?.displayName && profile.edition === edition) {
+    try {
+      // create(), not set(): see backfillParticipants below for why an
+      // organizer's correction to the name must never be clobbered.
+      await db.doc(`participants_public/${uid}`).create({
+        displayName: profile.displayName,
+        affiliation: profile.affiliation ?? "",
+        edition,
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+      published = true;
+    } catch (err) {
+      if (err?.code !== 6) throw err; // ALREADY_EXISTS: already published.
+    }
+  }
+
+  logger.info("email confirmed by organizer", { uid, by: adminUid, published });
+  return { email: user.email };
+});
+
 // ------------------------------------------------------ the listing backfill
 
 /**

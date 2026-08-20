@@ -4,7 +4,7 @@ import {
 import { sortParticipants } from "./participant-utils.mjs";
 import { describeParticipantDeletion, participantDeletionPlan } from "./deletion-utils.mjs";
 import { confirmChoice } from "./confirm-dialog.js";
-import { deleteParticipant } from "./functions.js";
+import { deleteParticipant, listUnverifiedParticipants, verifyParticipantEmail } from "./functions.js";
 import { toCsv } from "./csv-utils.mjs";
 import { download } from "./download.js";
 
@@ -54,6 +54,20 @@ export async function mountParticipantsTab(host, { adminUid } = {}) {
     const [users, abstracts, published, adminUids] = await Promise.all([
       listUsers(), listAbstracts(), listPublicAbstracts(), listAdminUids(),
     ]);
+
+    // Best-effort and separate from the Promise.all above: users/{uid} has no
+    // verified flag to read, so this is the one piece of this render that can
+    // only come from a callable. If it is not deployed yet, the tab still
+    // loads — "Confirm email" just does not appear on anybody, same as the
+    // delete buttons degrading rather than the whole tab failing when
+    // functions/ is missing (see the README).
+    let unverified = new Set();
+    try {
+      unverified = new Set((await listUnverifiedParticipants()).uids);
+    } catch (err) {
+      console.error("[pints] listUnverifiedParticipants", err);
+    }
+
     const sorted = sortParticipants(users);
     host.querySelector("#p-summary").textContent = `${sorted.length} registered`;
 
@@ -62,7 +76,7 @@ export async function mountParticipantsTab(host, { adminUid } = {}) {
     for (const user of sorted) {
       rows.append(editingUid === user.id
         ? editRow(user)
-        : readRow(user, abstracts, published, adminUids));
+        : readRow(user, abstracts, published, adminUids, unverified));
     }
 
     host.querySelector("#p-export-all").onclick = () =>
@@ -71,14 +85,14 @@ export async function mountParticipantsTab(host, { adminUid } = {}) {
     if (!sorted.length) say("Nobody has registered yet.", "warn");
   }
 
-  function readRow(user, abstracts, published, adminUids) {
+  function readRow(user, abstracts, published, adminUids, unverified) {
     const tr = document.createElement("tr");
     for (const value of [user.displayName, user.affiliation, user.email]) {
       const td = document.createElement("td");
       td.textContent = value ?? "";
       tr.append(td);
     }
-    tr.append(actionCell(user, abstracts, published, adminUids));
+    tr.append(actionCell(user, abstracts, published, adminUids, unverified));
     return tr;
   }
 
@@ -154,8 +168,14 @@ export async function mountParticipantsTab(host, { adminUid } = {}) {
     return tr;
   }
 
-  function actionCell(user, abstracts, published, adminUids) {
+  function actionCell(user, abstracts, published, adminUids, unverified) {
     const td = document.createElement("td");
+    // Buttons go straight into the cell rather than a flex .actions div: that
+    // wraps under this column's width and doubles the row's height, the same
+    // problem admin-schedule.js's td.tools (css/styles.css) exists to avoid —
+    // white-space: nowrap only holds inline siblings on one line, not flex
+    // children, so this row follows that pattern instead of .actions.
+    td.className = "tools";
 
     // Organizers are not deletable from here, and neither are you. Both are
     // refused server-side as well; this is about not offering an action that is
@@ -165,16 +185,36 @@ export async function mountParticipantsTab(host, { adminUid } = {}) {
     const label = user.id === adminUid ? "you"
       : adminUids.has(user.id) ? "organizer"
       : null;
-    const actions = document.createElement("div");
-    actions.className = "actions";
-    actions.style.marginTop = "0";
-    td.append(actions);
 
     const edit = document.createElement("button");
     edit.className = "secondary";
     edit.textContent = "Edit";
     edit.addEventListener("click", async () => { editingUid = user.id; await render(); });
-    actions.append(edit);
+    td.append(edit);
+
+    // Only for someone Firebase Auth still has unconfirmed — the one case
+    // "send it again" cannot fix, when a mail gateway drops the confirmation
+    // outright rather than quarantining it. contact.html's verify-gate sends
+    // that participant here. Gone from the row the moment it succeeds, since
+    // render() re-reads who is still unverified.
+    if (unverified.has(user.id)) {
+      const verify = document.createElement("button");
+      verify.className = "secondary";
+      verify.textContent = "Confirm email";
+      verify.title = "This participant has not confirmed their email. Confirm it by hand.";
+      verify.addEventListener("click", async () => {
+        verify.disabled = true;
+        try {
+          await verifyParticipantEmail(user.id);
+          say(`Confirmed ${user.displayName ?? "that participant"}’s email.`, "ok");
+          await render();
+        } catch (err) {
+          say(err?.userFacing ? err.message : "Could not confirm that address.", "err");
+          verify.disabled = false;
+        }
+      });
+      td.append(" ", verify);
+    }
 
     // Editing an organizer is fine; deleting one is not. Both refusals are
     // enforced server-side as well — this is about not offering an action that
@@ -187,7 +227,7 @@ export async function mountParticipantsTab(host, { adminUid } = {}) {
       note.title = label === "you"
         ? "You cannot delete your own account from the admin console."
         : "Revoke their organizer rights in Settings before deleting them.";
-      actions.append(note);
+      td.append(" ", note);
       return td;
     }
 
@@ -218,7 +258,7 @@ export async function mountParticipantsTab(host, { adminUid } = {}) {
       }
     });
 
-    actions.append(button);
+    td.append(" ", button);
     return td;
   }
 
