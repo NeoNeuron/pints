@@ -39,6 +39,13 @@ body {
 .prose { max-width: none; }
 .prose h1, .prose h2, .prose h3 { line-height: 1.25; margin: 2rem 0 .5rem; }
 .prose p, .prose ul, .prose ol { margin: 0 0 1rem; }
+/* Speaker name + photo, used on the home page under "Keynote", "PINTS without
+   borders", and "Invited speakers". .speaker-grid lets several sit side by
+   side on a wide screen and stack on a narrow one. */
+.speaker { display: flex; align-items: center; gap: .75rem; margin: 0 0 1rem; }
+.speaker-photo { width: 4rem; height: 4rem; border-radius: 50%; object-fit: cover; flex: 0 0 auto; }
+.speaker-grid { display: flex; flex-wrap: wrap; gap: 0 2rem; }
+.speaker a { color: var(--ink); }
 /* Markdown cannot attach a class, so any image embedded in content/*.md needs a
    global guard — without this a wide logo overflows .prose and makes the whole
    page scroll sideways. */

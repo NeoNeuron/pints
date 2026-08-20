@@ -8,19 +8,19 @@ span experimental, computational, and theoretical work.
 
 ## Keynote
 
-**[Devika Narain](https://www.narainlab.org/)**
+<div class="speaker"><img class="speaker-photo" src="assets/speakers/devika-narain.png" alt=""><strong><a href="https://www.narainlab.org/">Devika Narain</a></strong></div>
 
 ## PINTS without borders
 
-**[Antoine Balzeau](https://antoinebalzeau.jimdofree.com/)**
+<div class="speaker"><img class="speaker-photo" src="assets/speakers/antoine-balzeau.png" alt=""><strong><a href="https://antoinebalzeau.jimdofree.com/">Antoine Balzeau</a></strong></div>
 
 ## Invited speakers
 
-**[Stanislas Dehaene](https://en.wikipedia.org/wiki/Stanislas_Dehaene)** 
-
-**[Claire Wyart](https://en.wikipedia.org/wiki/Claire_Wyart)** 
-
-**[Rémi Monasson](https://www.phys.ens.fr/~monasson/)** 
+<div class="speaker-grid">
+<div class="speaker"><img class="speaker-photo" src="assets/speakers/stanislas-dehaene.png" alt=""><strong><a href="https://en.wikipedia.org/wiki/Stanislas_Dehaene">Stanislas Dehaene</a></strong></div>
+<div class="speaker"><img class="speaker-photo" src="assets/speakers/claire-wyart.png" alt=""><strong><a href="https://en.wikipedia.org/wiki/Claire_Wyart">Claire Wyart</a></strong></div>
+<div class="speaker"><img class="speaker-photo" src="assets/speakers/remi-monasson.png" alt=""><strong><a href="https://www.phys.ens.fr/~monasson/">Rémi Monasson</a></strong></div>
+</div>
 
 ## Registration
 
