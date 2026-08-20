@@ -33,7 +33,7 @@ const TEMPLATE = `
     </label>
     <div class="table-scroll">
       <table>
-        <thead><tr><th>Name</th><th>Affiliations</th><th>Presenting</th><th></th></tr></thead>
+        <thead><tr><th></th><th>Name</th><th>Affiliations</th><th>Presenting</th><th></th></tr></thead>
         <tbody id="abs-authors"></tbody>
       </table>
     </div>
@@ -88,9 +88,30 @@ const TEMPLATE = `
   </form>
 `;
 
+/**
+ * One row of the authors table.
+ *
+ * The order of these rows IS the author order — `collect()` reads authors
+ * straight off `#abs-authors`'s child order, so reordering the DOM is the
+ * whole implementation of reordering authors. `onChange` fires after every
+ * mutation (add, remove, move) because none of them are input events the
+ * preview would otherwise catch.
+ *
+ * The handle cell offers two ways to move a row: dragging (mouse only, and
+ * only from the ⠿ handle, so dragging text inside the Name/Affiliations
+ * inputs is unaffected), and ↑/↓ buttons, which work with a keyboard or on
+ * touch. Both end up doing the same DOM move.
+ */
 function authorRow({ name = "", marks = "", presenting = false } = {}, onChange = () => {}) {
   const tr = document.createElement("tr");
   tr.innerHTML = `
+    <td class="a-handle">
+      <span class="drag-handle" draggable="true" aria-hidden="true">⠿</span>
+      <span class="a-move">
+        <button type="button" class="secondary a-up" aria-label="Move author up">↑</button>
+        <button type="button" class="secondary a-down" aria-label="Move author down">↓</button>
+      </span>
+    </td>
     <td><input type="text" class="a-name" maxlength="120"></td>
     <td><input type="text" class="a-marks" size="6" inputmode="numeric"></td>
     <td><input type="radio" name="presenting" class="a-presenting"></td>
@@ -103,7 +124,62 @@ function authorRow({ name = "", marks = "", presenting = false } = {}, onChange 
     tr.remove();
     onChange();
   });
+  tr.querySelector(".a-up").addEventListener("click", () => {
+    const prev = tr.previousElementSibling;
+    if (prev) tr.parentElement.insertBefore(tr, prev);
+    onChange();
+  });
+  tr.querySelector(".a-down").addEventListener("click", () => {
+    const next = tr.nextElementSibling;
+    if (next) tr.parentElement.insertBefore(next, tr);
+    onChange();
+  });
   return tr;
+}
+
+/**
+ * Disables the ↑ button on the first row and the ↓ button on the last, so
+ * the ends of the list do not offer a move that has nowhere to go. Called
+ * after every add, remove or reorder — there is no cheaper way to know
+ * which row is now first or last.
+ */
+function updateAuthorMoveButtons(authorsEl) {
+  const rows = [...authorsEl.children];
+  rows.forEach((tr, i) => {
+    tr.querySelector(".a-up").disabled = i === 0;
+    tr.querySelector(".a-down").disabled = i === rows.length - 1;
+  });
+}
+
+/**
+ * Wires drag-to-reorder on the authors table. Native HTML5 drag-and-drop,
+ * started only from a `.drag-handle` (never the row itself, which would
+ * fight with selecting text in the Name/Affiliations inputs). Delegated on
+ * the tbody rather than per-row, so rows added later need no extra wiring.
+ */
+function wireAuthorDrag(authorsEl, onDrop) {
+  let dragging = null;
+  authorsEl.addEventListener("dragstart", (e) => {
+    const handle = e.target.closest(".drag-handle");
+    if (!handle) return;
+    dragging = handle.closest("tr");
+    dragging.classList.add("dragging");
+    e.dataTransfer.effectAllowed = "move";
+  });
+  authorsEl.addEventListener("dragover", (e) => {
+    if (!dragging) return;
+    e.preventDefault();
+    const target = e.target.closest("tr");
+    if (!target || target === dragging) return;
+    const before = e.clientY < target.getBoundingClientRect().top + target.offsetHeight / 2;
+    authorsEl.insertBefore(dragging, before ? target : target.nextSibling);
+  });
+  authorsEl.addEventListener("dragend", () => {
+    if (!dragging) return;
+    dragging.classList.remove("dragging");
+    dragging = null;
+    onDrop();
+  });
 }
 
 /**
@@ -242,6 +318,16 @@ export async function mountAbstractForm(
   const ownerUid = abstract?.ownerUid ?? user.uid;
   const editingSomeoneElse = ownerUid !== user.uid;
 
+  // Shared by every way an author row can move or disappear (remove, ↑/↓,
+  // drag): the preview has to redraw with the new order, and the ↑/↓ buttons
+  // at the new ends of the list have to disable. Defined ahead of
+  // `refreshPreview` itself — safe because nothing here calls it yet, only
+  // hands it to callbacks that fire later, by which point it exists.
+  const onAuthorsChanged = () => {
+    updateAuthorMoveButtons(authorsEl);
+    refreshPreview();
+  };
+
   if (abstract) {
     titleEl.value = abstract.title ?? "";
     topicEl.value = abstract.topic ?? "";
@@ -254,7 +340,7 @@ export async function mountAbstractForm(
         name: author.name,
         marks: (author.affiliationIndexes ?? []).map((i) => i + 1).join(","),
         presenting: author.presenting,
-      }, () => refreshPreview()));
+      }, onAuthorsChanged));
     }
     showFigure(figureUrl);
     saveBtn.textContent = "Save changes";
@@ -268,8 +354,10 @@ export async function mountAbstractForm(
     // the profile is what makes that mark point at something.
     affEl.value = defaultAffiliation;
     authorsEl.append(authorRow(
-      { name: defaultAuthorName, marks: "1", presenting: true }, () => refreshPreview()));
+      { name: defaultAuthorName, marks: "1", presenting: true }, onAuthorsChanged));
   }
+  updateAuthorMoveButtons(authorsEl);
+  wireAuthorDrag(authorsEl, onAuthorsChanged);
 
   // Only an accepted abstract is locked, matching the rules: its public copy
   // would otherwise go stale. A rejected one stays editable so the participant
@@ -378,8 +466,8 @@ export async function mountAbstractForm(
   refreshPreview();
 
   $("#abs-add-author").addEventListener("click", () => {
-    authorsEl.append(authorRow({}, refreshPreview));
-    refreshPreview();
+    authorsEl.append(authorRow({}, onAuthorsChanged));
+    onAuthorsChanged();
   });
 
   figureEl.addEventListener("change", () => {

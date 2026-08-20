@@ -466,6 +466,10 @@ main { padding-block: 2rem 1rem; }
 /* Cards, tables, forms */
 figure { margin: 1rem 0; }
 figcaption { margin-top: .35rem; max-width: var(--measure); color: var(--muted); font-size: .9rem; }
+/* Inside an abstract panel card, the caption sits directly under the abstract
+   body — it should wrap and set type at the same width and size as that text,
+   not the global reading measure, which is narrower than the card. */
+.card figcaption, .abstract-body figcaption { max-width: none; font-size: inherit; }
 
 .card { border: 1px solid var(--line); border-radius: var(--radius); padding: 1rem 1.25rem; margin-bottom: 1rem; background: var(--bg); }
 /* h1 when the card is a whole page (a shared abstract link), h3 in a list.
@@ -572,6 +576,15 @@ td.time { white-space: nowrap; font-variant-numeric: tabular-nums; }
    would otherwise stack and double every row's height. The table already sits
    in .table-scroll, which absorbs the extra width on a narrow screen. */
 td.tools { white-space: nowrap; width: 1%; }
+
+/* Author reordering, on the submit-an-abstract form: a drag handle for the
+   mouse, plus ↑/↓ buttons that do the same move for a keyboard or on touch,
+   where the drag handle does not respond. */
+.a-handle { white-space: nowrap; width: 1%; }
+.drag-handle { display: inline-block; cursor: grab; font-size: 1.1rem; line-height: 1; margin-right: .35rem; color: var(--muted); }
+.a-move { display: inline-flex; flex-direction: column; gap: .15rem; vertical-align: middle; }
+.a-move button { padding: .05rem .4rem; font-size: .75rem; line-height: 1.4; }
+tr.dragging { opacity: .4; }
 
 /* The title is what the reader is scanning for, so it carries the weight. The
    muted rows keep theirs: coffee and lunch are the punctuation between sessions,
