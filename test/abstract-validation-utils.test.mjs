@@ -5,6 +5,7 @@ import {
   parseAffiliations,
   validateAbstract,
 } from "../js/abstract-validation-utils.mjs";
+import { LIMITS } from "../js/config.mjs";
 
 const good = (over = {}) => ({
   title: "Recurrent dynamics in mouse V1",
@@ -141,9 +142,11 @@ test("a figure is required, and so is its caption", () => {
 
 test("a caption longer than the limit is rejected", () => {
   const { valid, errors } = validateAbstract(
-    good({ figureCaption: "x".repeat(301) }), openNow);
+    good({ figureCaption: "x".repeat(LIMITS.figureCaption + 1) }), openNow);
   assert.equal(valid, false);
-  assert.ok(errors.some((e) => e.includes("300 characters or fewer")));
+  assert.ok(errors.some((e) => e.includes(`${LIMITS.figureCaption} characters or fewer`)));
 
-  assert.equal(validateAbstract(good({ figureCaption: "x".repeat(300) }), openNow).valid, true);
+  assert.equal(
+    validateAbstract(good({ figureCaption: "x".repeat(LIMITS.figureCaption) }), openNow).valid,
+    true);
 });

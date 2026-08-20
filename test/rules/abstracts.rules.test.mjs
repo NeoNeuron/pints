@@ -140,7 +140,7 @@ test("a figure and its caption are required", async () => {
   await assertFails(setDoc(doc(fs, "abstracts", "alice"), abstract({ figureUrl: null })));
   await assertFails(setDoc(doc(fs, "abstracts", "alice"), abstract({ figureCaption: "" })));
   await assertFails(setDoc(doc(fs, "abstracts", "alice"),
-    abstract({ figureCaption: "c".repeat(301) })));
+    abstract({ figureCaption: "c".repeat(601) })));
   await assertFails(setDoc(doc(fs, "abstracts", "alice"), abstract({ figureCaption: 42 })));
 
   const { figureCaption, ...noCaption } = abstract();

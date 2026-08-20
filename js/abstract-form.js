@@ -58,7 +58,7 @@ const TEMPLATE = `
       <span class="hint">Required. Plain text, no formatting.
         <span id="abs-caption-count"></span></span>
     </label>
-    <textarea id="abs-figure-caption" maxlength="300" rows="2"
+    <textarea id="abs-figure-caption" maxlength="${LIMITS.figureCaption}" rows="2"
       style="min-height:4rem" required></textarea>
 
     <div class="checkline">

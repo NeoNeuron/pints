@@ -23,7 +23,7 @@ export const LIMITS = {
   body: 2500,
   authors: 20,
   affiliations: 10,
-  figureCaption: 300,
+  figureCaption: 600,
   pageMarkdown: 20000,
   contactMessage: 4000,
 };

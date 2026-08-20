@@ -62,7 +62,7 @@ service cloud.firestore {
         && data.topic in ['cognitive', 'systems', 'computational']
         && data.talkConsidered is bool
         && str(data.figureUrl, 500)
-        && str(data.figureCaption, 300)
+        && str(data.figureCaption, 600)
         && (!('figurePath' in data) || data.figurePath == null || str(data.figurePath, 300))
         && data.authors is list && data.authors.size() > 0 && data.authors.size() <= 20
         && data.affiliations is list && data.affiliations.size() <= 10;
