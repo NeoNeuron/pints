@@ -10,6 +10,64 @@ function navLink({ href, label, active }) {
   return a;
 }
 
+const NARROW = () => window.matchMedia("(max-width: 40rem)");
+
+/**
+ * The hamburger button that collapses `nav` into a dropdown panel below the
+ * header on a narrow screen. Below the breakpoint CSS hides `nav` by default
+ * and shows it as an absolutely-positioned panel once `nav[data-open]` is
+ * set; above it, CSS hides this button entirely and `nav` is always the
+ * normal flex row, so nothing here needs to special-case desktop width.
+ */
+function navToggle(nav) {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "nav-toggle";
+  button.setAttribute("aria-label", "Menu");
+  button.setAttribute("aria-controls", nav.id);
+  button.setAttribute("aria-expanded", "false");
+  for (let i = 0; i < 3; i++) {
+    const bar = document.createElement("span");
+    bar.className = "nav-toggle-bar";
+    button.append(bar);
+  }
+
+  const setOpen = (open) => {
+    if (open) nav.setAttribute("data-open", "true");
+    else nav.removeAttribute("data-open");
+    button.setAttribute("aria-expanded", String(open));
+  };
+
+  button.addEventListener("click", () => setOpen(nav.getAttribute("data-open") !== "true"));
+
+  // Closing on a link click matters even though every nav link navigates
+  // away: without it, a page that restores scroll/DOM from the back-forward
+  // cache would still show the panel open.
+  nav.addEventListener("click", (e) => {
+    if (e.target.closest("a")) setOpen(false);
+  });
+
+  document.addEventListener("click", (e) => {
+    if (nav.getAttribute("data-open") === "true"
+      && !nav.contains(e.target) && e.target !== button && !button.contains(e.target)) {
+      setOpen(false);
+    }
+  });
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && nav.getAttribute("data-open") === "true") {
+      setOpen(false);
+      button.focus();
+    }
+  });
+  // A resize back past the breakpoint leaves the panel's CSS inert (the
+  // absolute-position rules are scoped to the same media query), but without
+  // this the stale [data-open]/aria-expanded would show the panel already
+  // open the next time the window narrows.
+  NARROW().addEventListener("change", (e) => { if (!e.matches) setOpen(false); });
+
+  return button;
+}
+
 /** Fill #site-header and #site-footer. Called by every page. */
 export function mountLayout() {
   const header = document.getElementById("site-header");
@@ -36,6 +94,7 @@ export function mountLayout() {
 
     const nav = document.createElement("nav");
     nav.className = "site-nav";
+    nav.id = "site-nav";
     nav.setAttribute("aria-label", "Main");
     for (const item of markActive(NAV, location.pathname)) nav.append(navLink(item));
 
@@ -49,7 +108,7 @@ export function mountLayout() {
     authLinks.append(authLink("login.html", "Sign in"));
     nav.append(authLinks);
 
-    wrap.append(brand, nav);
+    wrap.append(brand, navToggle(nav), nav);
     header.replaceChildren(wrap);
   }
 

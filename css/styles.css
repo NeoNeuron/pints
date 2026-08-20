@@ -54,6 +54,40 @@ a { color: var(--accent); }
    letters look. */
 .brand { display: flex; align-items: center; text-decoration: none; }
 .brand img { display: block; height: 1.85rem; width: auto; }
+/* The hamburger toggle. Hidden here (desktop default); the narrow-viewport
+   media query near the end of this file is what actually shows it and turns
+   .site-nav into the panel it opens. */
+.nav-toggle {
+  display: none;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: .3rem;
+  width: 2.25rem;
+  height: 2.25rem;
+  padding: 0;
+  margin-left: auto;
+  background: none;
+  border: none;
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+.nav-toggle-bar {
+  display: block;
+  width: 1.35rem;
+  height: 2px;
+  background: var(--ink);
+  border-radius: 1px;
+  transition: transform .2s ease, opacity .2s ease;
+}
+/* Morphs the three bars into an X when open -- the same button has to read
+   as "close" once the panel is showing. */
+.nav-toggle[aria-expanded="true"] .nav-toggle-bar:nth-child(1) { transform: translateY(.6rem) rotate(45deg); }
+.nav-toggle[aria-expanded="true"] .nav-toggle-bar:nth-child(2) { opacity: 0; }
+.nav-toggle[aria-expanded="true"] .nav-toggle-bar:nth-child(3) { transform: translateY(-.6rem) rotate(-45deg); }
+@media (prefers-reduced-motion: reduce) {
+  .nav-toggle-bar { transition: none; }
+}
 .site-nav { display: flex; flex-wrap: wrap; gap: .25rem 1.05rem; margin-left: auto; }
 /* nowrap so a two-word label like "My account" can never break mid-label and
    drag the row height with it. */
@@ -603,7 +637,7 @@ button[disabled] { opacity: .5; cursor: not-allowed; }
  * home page -- which is why it is one rule on `button, .button` and not four
  * buttons in the hero.
  *
- * FOUR BUTTONS OPT OUT, and all four are buttons only in the DOM sense:
+ * FIVE BUTTONS OPT OUT, and all five are buttons only in the DOM sense:
  *   .to-top        carries its own shadow and its own transition, and fades
  *                  itself in from opacity: 0.
  *   .album-thumb   is an image with a button wrapped round it. `background:
@@ -619,6 +653,9 @@ button[disabled] { opacity: .5; cursor: not-allowed; }
  *                  were overridden by the more specific nav rule, but nothing
  *                  overrode those two, so "Sign out" got a floating shadow
  *                  with no fill behind it: a stray box around plain text.
+ *   .nav-toggle    the hamburger button has its own bar-morph animation on
+ *                  [aria-expanded] instead -- the same box-shadow-with-no-fill
+ *                  problem as "Sign out" above, same fix.
  *
  * THE :where() INSIDE :not() IS LOAD-BEARING, not a stylistic choice. :not()
  * takes the specificity of its most specific argument, so a bare
@@ -639,11 +676,11 @@ button[disabled] { opacity: .5; cursor: not-allowed; }
  * browser applies :hover on tap and leaves it applied until the next tap
  * somewhere else, which would leave the last button anybody touched lit up. */
 @media (hover: hover) and (pointer: fine) {
-  :is(button, .button):not(:where(.to-top, .album-thumb, .tabs button, .site-nav button.auth-link)) {
+  :is(button, .button):not(:where(.to-top, .album-thumb, .tabs button, .site-nav button.auth-link, .nav-toggle)) {
     transition: transform .15s ease, box-shadow .15s ease,
                 background-color .15s ease, border-color .15s ease, color .15s ease;
   }
-  :is(button, .button):not(:where([disabled], .to-top, .album-thumb, .tabs button, .site-nav button.auth-link)):hover {
+  :is(button, .button):not(:where([disabled], .to-top, .album-thumb, .tabs button, .site-nav button.auth-link, .nav-toggle)):hover {
     transform: translateY(-2px);
     box-shadow: 0 4px 10px rgb(from var(--ink) r g b / .18);
     /* Named for all three variants at once: a secondary fills from transparent,
@@ -776,6 +813,40 @@ sup { font-size: .7em; }
 .sponsors img { max-height: 3.5rem; width: auto; }
 
 @media (max-width: 40rem) {
+  /* Anchors the dropdown panel below: .site-nav[data-open] is positioned
+     relative to this, not to .wrap, so it spans the full header edge to
+     edge rather than just the 62rem column. */
+  .site-header { position: relative; }
   .site-header .wrap { padding-block: .75rem; }
-  .site-nav { margin-left: 0; width: 100%; }
+  .nav-toggle { display: flex; }
+  /* Collapsed by default; .site-nav[data-open="true"] below is what
+     js/layout.js's navToggle() actually shows. */
+  .site-nav { display: none; margin-left: 0; width: 100%; }
+  .site-nav[data-open="true"] {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: .15rem;
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    padding: .5rem 1.25rem 1rem;
+    background: var(--bg);
+    border-bottom: 1px solid var(--line);
+    box-shadow: 0 8px 20px rgb(from var(--ink) r g b / .16);
+    /* Above the account dropdown's own panel (z-index 20), which nests
+       inside this one and must still paint over the rows below it. */
+    z-index: 30;
+    /* Rows stay full-width (align-items: stretch, above) for a big tap
+       target, but the text itself reads right-aligned. */
+    text-align: right;
+  }
+  /* The floating "My account" card is its own small self-contained menu,
+     not one of the stacked rows -- it keeps its normal left alignment. */
+  .site-nav[data-open="true"] .nav-dropdown-panel { text-align: left; }
+  .site-nav[data-open="true"] a,
+  .site-nav[data-open="true"] button.auth-link {
+    padding-block: .6rem;
+  }
 }
