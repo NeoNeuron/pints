@@ -1,6 +1,6 @@
 import { mountLayout, setAuthLink } from "./layout.js";
 import { warnIfUnconfigured } from "./firebase.js";
-import { checkIsAdmin, refreshVerification, requireUser, sendVerification, signOutNow } from "./auth.js";
+import { checkIsAdmin, refreshVerification, requireUser, sendVerification } from "./auth.js";
 import { getProfile, publishParticipant, saveProfile } from "./db.js";
 
 mountLayout();
@@ -104,10 +104,5 @@ if (warnIfUnconfigured(msg)) {
       say("Could not save your details. Please try again.", "err");
       console.error("[pints] saveProfile", err);
     }
-  });
-
-  document.getElementById("signout").addEventListener("click", async () => {
-    await signOutNow();
-    location.replace("index.html");
   });
 }

@@ -1,5 +1,6 @@
 import { NAV, SITE_NAME, SITE_TAGLINE } from "./config.mjs";
 import { markActive } from "./nav-utils.mjs";
+import { signOutNow } from "./auth.js";
 
 function navLink({ href, label, active }) {
   const a = document.createElement("a");
@@ -142,12 +143,72 @@ function authLink(href, label) {
   return a;
 }
 
+// Same query the CSS hover styles are gated behind. A touch screen has no
+// :hover, so the first tap on the trigger has to open the panel rather than
+// act -- otherwise a signed-in phone user could never reach "My account".
+const hasHover = () => window.matchMedia("(hover: hover) and (pointer: fine)").matches;
+
+/**
+ * The signed-in nav item: a "Sign out" trigger, with "My account" tucked into
+ * a dropdown rather than taking a nav slot of its own. A <button>, not a
+ * link, since clicking it performs an action rather than navigating.
+ *
+ * On a mouse, hover already reveals "My account" (see CSS), so a click is an
+ * unambiguous request to sign out. On touch there is no hover: the first tap
+ * opens the panel instead of acting, so "My account" stays reachable; a
+ * second tap on "Sign out" -- now that the panel is open -- signs out.
+ */
+function accountDropdown() {
+  const wrap = document.createElement("span");
+  wrap.className = "nav-dropdown";
+
+  const trigger = document.createElement("button");
+  trigger.type = "button";
+  trigger.className = "auth-link";
+  trigger.textContent = "Sign out";
+  trigger.setAttribute("aria-expanded", "false");
+  trigger.addEventListener("click", async () => {
+    if (!hasHover() && wrap.getAttribute("data-open") !== "true") {
+      wrap.setAttribute("data-open", "true");
+      trigger.setAttribute("aria-expanded", "true");
+      return;
+    }
+    await signOutNow();
+    location.href = "index.html";
+  });
+
+  const menu = document.createElement("div");
+  menu.className = "nav-dropdown-menu";
+  const panel = document.createElement("div");
+  panel.className = "nav-dropdown-panel";
+  panel.append(authLink("account.html", "My account"));
+  menu.append(panel);
+
+  // Tapping elsewhere closes an open panel on touch. Self-removing once this
+  // dropdown leaves the document -- setAuthLink() rebuilds it on every
+  // auth-state change, so this would otherwise leak one listener per rebuild.
+  document.addEventListener("click", function onDocClick(e) {
+    if (!document.contains(wrap)) {
+      document.removeEventListener("click", onDocClick);
+      return;
+    }
+    if (wrap.getAttribute("data-open") === "true" && !wrap.contains(e.target)) {
+      wrap.removeAttribute("data-open");
+      trigger.setAttribute("aria-expanded", "false");
+    }
+  });
+
+  wrap.append(trigger, menu);
+  return wrap;
+}
+
 /**
  * Rebuild the header auth links once auth state is known.
  *
- * Admins get BOTH links. An organizer is also a participant: they need to set
- * their own display name and submit their own abstract, and with only an
- * "Admin" link there is no route to account.html at all.
+ * Admins get BOTH the account dropdown and the "Admin" link. An organizer is
+ * also a participant: they need to set their own display name and submit
+ * their own abstract, and with only an "Admin" link there is no route to
+ * account.html at all.
  */
 export function setAuthLink({ signedIn, isAdmin }) {
   const host = document.getElementById("auth-links");
@@ -155,11 +216,8 @@ export function setAuthLink({ signedIn, isAdmin }) {
   if (!signedIn) {
     host.replaceChildren(authLink("login.html", "Sign in"));
   } else if (isAdmin) {
-    host.replaceChildren(
-      authLink("account.html", "My account"),
-      authLink("admin.html", "Admin"),
-    );
+    host.replaceChildren(accountDropdown(), authLink("admin.html", "Admin"));
   } else {
-    host.replaceChildren(authLink("account.html", "My account"));
+    host.replaceChildren(accountDropdown());
   }
 }
