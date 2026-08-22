@@ -34,6 +34,11 @@ export async function mountScheduleTab(host) {
     msg.textContent = text;
   };
 
+  // Start and end share one row: both are a handful of digits, and stacked
+  // full-width like the text fields below them they wasted most of a line
+  // each.
+  const timeRow = document.createElement("div");
+  timeRow.className = "field-row";
   for (const spec of FIELDS) {
     const label = document.createElement("label");
     label.setAttribute("for", `s-${spec.key}`);
@@ -43,7 +48,14 @@ export async function mountScheduleTab(host) {
     input.type = spec.type;
     if (spec.step) input.step = String(spec.step);
     if (spec.required) input.required = true;
-    form.append(label, input);
+    if (spec.key === "start" || spec.key === "end") {
+      const field = document.createElement("div");
+      field.append(label, input);
+      timeRow.append(field);
+      if (spec.key === "end") form.append(timeRow);
+    } else {
+      form.append(label, input);
+    }
   }
 
   const kindLabel = document.createElement("label");

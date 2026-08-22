@@ -639,6 +639,13 @@ textarea { min-height: 12rem; resize: vertical; }
 .checkline input { margin-top: .35rem; }
 .checkline label { margin: 0; }
 
+/* A pair of narrow fields (start/end time and the like) that would otherwise
+   each claim a full-width row for a value a few characters wide. flex-wrap
+   lets the pair drop back to one-per-line if the form is ever squeezed
+   narrower than two comfortable time fields. */
+.field-row { display: flex; flex-wrap: wrap; gap: 0 1rem; }
+.field-row > div { flex: 1 1 8rem; }
+
 button, .button {
   font: inherit; font-weight: 600; padding: .5rem 1rem; border-radius: var(--radius);
   border: 1px solid var(--accent); background: var(--accent); color: #fff; cursor: pointer;
