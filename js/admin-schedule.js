@@ -58,19 +58,6 @@ export async function mountScheduleTab(host) {
     }
   }
 
-  const kindLabel = document.createElement("label");
-  kindLabel.setAttribute("for", "s-kind");
-  kindLabel.textContent = "Kind";
-  const kindSelect = document.createElement("select");
-  kindSelect.id = "s-kind";
-  for (const kind of SCHEDULE_KINDS) {
-    const option = document.createElement("option");
-    option.value = kind;
-    option.textContent = kind;
-    kindSelect.append(option);
-  }
-  form.append(kindLabel, kindSelect);
-
   // Optional on purpose: coffee, lunch and the poster slot belong to no session
   // and print between the blocks, exactly as they do on the printed grid. The
   // numeral is not stored — it comes from where the block lands in the day, so
@@ -95,7 +82,27 @@ export async function mountScheduleTab(host) {
     option.textContent = SESSION_LABELS[id];
     sessionSelect.append(option);
   }
-  form.append(sessionLabel, sessionSelect);
+  const sessionField = document.createElement("div");
+  sessionField.append(sessionLabel, sessionSelect);
+
+  const kindLabel = document.createElement("label");
+  kindLabel.setAttribute("for", "s-kind");
+  kindLabel.textContent = "Kind";
+  const kindSelect = document.createElement("select");
+  kindSelect.id = "s-kind";
+  for (const kind of SCHEDULE_KINDS) {
+    const option = document.createElement("option");
+    option.value = kind;
+    option.textContent = kind;
+    kindSelect.append(option);
+  }
+  const kindField = document.createElement("div");
+  kindField.append(kindLabel, kindSelect);
+
+  const kindSessionRow = document.createElement("div");
+  kindSessionRow.className = "field-row";
+  kindSessionRow.append(sessionField, kindField);
+  form.append(kindSessionRow);
 
   const actions = document.createElement("div");
   actions.className = "actions";
