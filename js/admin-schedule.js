@@ -65,11 +65,6 @@ export async function mountScheduleTab(host) {
   const sessionLabel = document.createElement("label");
   sessionLabel.setAttribute("for", "s-session");
   sessionLabel.textContent = "Session";
-  const sessionHint = document.createElement("span");
-  sessionHint.className = "hint";
-  sessionHint.textContent =
-    "Items sharing a session are grouped under one banner, numbered by time.";
-  sessionLabel.append(sessionHint);
   const sessionSelect = document.createElement("select");
   sessionSelect.id = "s-session";
   const none = document.createElement("option");
