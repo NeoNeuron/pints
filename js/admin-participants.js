@@ -48,6 +48,17 @@ export async function mountParticipantsTab(host, { adminUid } = {}) {
   // Which row is being edited, if any. One at a time.
   let editingUid = null;
 
+  // These Firestore reads have no built-in timeout: on a bad connection the
+  // initial load can hang indefinitely with no feedback. Race it against a
+  // timer so a stall surfaces as an error instead of a silent blank tab.
+  const LOAD_TIMEOUT_MS = 10_000;
+  function withTimeout(promise, ms) {
+    return Promise.race([
+      promise,
+      new Promise((_, reject) => setTimeout(() => reject(new Error("timed out")), ms)),
+    ]);
+  }
+
   async function render() {
     // Abstracts are loaded so the confirmation can say what else goes with the
     // participant. The list is small and this tab is opened rarely.
@@ -262,10 +273,16 @@ export async function mountParticipantsTab(host, { adminUid } = {}) {
     return td;
   }
 
+  const LOADING_TEXT = "Loading registrations…";
+  say(LOADING_TEXT, "");
   try {
-    await render();
+    await withTimeout(render(), LOAD_TIMEOUT_MS);
+    // render() overwrites this itself when the list is empty; otherwise clear it.
+    if (msg.textContent === LOADING_TEXT) say("", "");
   } catch (err) {
-    say("Could not load registrations.", "err");
+    say(err.message === "timed out"
+      ? "This is taking too long. Check your connection and reload the page."
+      : "Could not load registrations.", "err");
     console.error("[pints] admin participants", err);
   }
 }
