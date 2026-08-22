@@ -12,7 +12,7 @@ import {
   where,
   writeBatch,
 } from "https://www.gstatic.com/firebasejs/12.16.0/firebase-firestore.js";
-import { db } from "./firebase.js";
+import { db, publicDb } from "./firebase.js";
 import { CURRENT_EDITION } from "./config.mjs";
 
 const snapData = (snap) => ({ id: snap.id, ...snap.data() });
@@ -74,14 +74,19 @@ export async function saveProfile(
 export const publishParticipant = (uid, { displayName, affiliation }) =>
   setDoc(doc(db, "participants_public", uid), publicProjection(displayName, affiliation));
 
+// publicDb, not db: this is `allow read: if true` in firestore.rules and has
+// no admin writer to reconcile with — see the comment on publicDb in
+// firebase.js for why that split matters here.
 export async function listPublicParticipants() {
-  const q = query(collection(db, "participants_public"), where("edition", "==", CURRENT_EDITION));
+  const q = query(collection(publicDb, "participants_public"), where("edition", "==", CURRENT_EDITION));
   const snap = await getDocs(q);
   return snap.docs.map(snapData);
 }
 
+// publicDb: `allow read: if true` in firestore.rules — see the comment on
+// publicDb in firebase.js. Writes still go through saveSiteConfig() on db.
 export async function getSiteConfig() {
-  const snap = await getDoc(doc(db, "config", "site"));
+  const snap = await getDoc(doc(publicDb, "config", "site"));
   return snap.exists() ? snap.data() : null;
 }
 
@@ -203,15 +208,18 @@ export async function listAbstracts() {
  * null both when the id is unknown and when it belongs to another edition, so a
  * link shared last year does not surface the wrong meeting's poster.
  */
+// publicDb below: `allow read: if true` in firestore.rules — see the comment
+// on publicDb in firebase.js. Writes still go through db (saveAbstract,
+// publishAbstract, returnToReview).
 export async function getPublicAbstract(id) {
-  const snap = await getDoc(doc(db, "abstracts_public", id));
+  const snap = await getDoc(doc(publicDb, "abstracts_public", id));
   if (!snap.exists()) return null;
   const abstract = snapData(snap);
   return abstract.edition === CURRENT_EDITION ? abstract : null;
 }
 
 export async function listPublicAbstracts() {
-  const q = query(collection(db, "abstracts_public"), where("edition", "==", CURRENT_EDITION));
+  const q = query(collection(publicDb, "abstracts_public"), where("edition", "==", CURRENT_EDITION));
   return (await getDocs(q)).docs.map(snapData);
 }
 
@@ -337,8 +345,10 @@ export const sendContactMessage = ({ name, email, topic, message, authorUid = nu
  * one year to the next, and an organizer who edits a page means to edit the
  * page, not this year's copy of it.
  */
+// publicDb: `allow read: if true` in firestore.rules — see the comment on
+// publicDb in firebase.js. Writes still go through savePage() on db.
 export async function getPage(slug) {
-  const snap = await getDoc(doc(db, "pages", slug));
+  const snap = await getDoc(doc(publicDb, "pages", slug));
   return snap.exists() ? snap.data() : null;
 }
 
@@ -351,8 +361,11 @@ export const savePage = (slug, markdown, adminUid) =>
 
 // ----------------------------------------------------------------- schedule
 
+// publicDb: `allow read: if true` in firestore.rules — see the comment on
+// publicDb in firebase.js. Writes still go through db (saveScheduleItem,
+// deleteScheduleItem).
 export async function listSchedule() {
-  const q = query(collection(db, "schedule"), where("edition", "==", CURRENT_EDITION));
+  const q = query(collection(publicDb, "schedule"), where("edition", "==", CURRENT_EDITION));
   return (await getDocs(q)).docs.map(snapData);
 }
 
@@ -391,8 +404,10 @@ export function saveSiteConfig(patch) {
  * the hero exactly as it is", which is the correct behaviour and also what
  * every visitor sees before an organizer uploads anything.
  */
+// publicDb: `allow read: if true` in firestore.rules — see the comment on
+// publicDb in firebase.js. Writes still go through saveHeroPhotos() on db.
 export async function getHeroPhotos() {
-  const snap = await getDoc(doc(db, "config", "hero"));
+  const snap = await getDoc(doc(publicDb, "config", "hero"));
   return snap.exists() ? snap.data() : null;
 }
 
@@ -440,13 +455,16 @@ export async function listAdmins() {
  * Not edition-scoped in the CURRENT_EDITION sense: the whole point is the years
  * that are not this one. The `year` field carries which is which.
  */
+// publicDb below: `allow read: if true` in firestore.rules — see the comment
+// on publicDb in firebase.js. Writes still go through db (saveGalleryPhotos,
+// deleteGalleryYear).
 export async function listGallery() {
-  const snap = await getDocs(collection(db, "gallery"));
+  const snap = await getDocs(collection(publicDb, "gallery"));
   return snap.docs.map(snapData);
 }
 
 export async function getGalleryYear(year) {
-  const snap = await getDoc(doc(db, "gallery", String(year)));
+  const snap = await getDoc(doc(publicDb, "gallery", String(year)));
   return snap.exists() ? snapData(snap) : null;
 }
 

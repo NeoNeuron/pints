@@ -12,6 +12,21 @@ export const db = getFirestore(app);
 export const storage = getStorage(app);
 
 /**
+ * A second Firestore client, deliberately never paired with getAuth().
+ *
+ * Firestore's first request on `db` waits for Auth to resolve its initial
+ * state, even for a query firestore.rules grants to `if true` — because the
+ * SDK does not know in advance whether a request needs a token. For anyone
+ * with a persisted session that adds a full identitytoolkit round trip in
+ * front of every public read, every page load. Since `publicApp` never calls
+ * getAuth(), Firestore on it has no credentials provider to wait on and fires
+ * immediately. Use it in db.js only for reads firestore.rules marks
+ * `allow read: if true` — anything requiring request.auth must stay on `db`.
+ */
+export const publicApp = initializeApp(firebaseConfig, "public");
+export const publicDb = getFirestore(publicApp);
+
+/**
  * Point the whole SDK at `firebase emulators:start` when asked.
  *
  * Some flows cannot be rehearsed against production without leaving real
@@ -30,6 +45,7 @@ export const usingEmulators = ["localhost", "127.0.0.1"].includes(location.hostn
 if (usingEmulators) {
   connectAuthEmulator(auth, "http://127.0.0.1:9099", { disableWarnings: true });
   connectFirestoreEmulator(db, "127.0.0.1", 8080);
+  connectFirestoreEmulator(publicDb, "127.0.0.1", 8080);
   connectStorageEmulator(storage, "127.0.0.1", 9199);
   console.info("[pints] using the local Firebase emulators");
 }
